@@ -164,6 +164,18 @@
                 <div class="md:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-6 border-t border-indigo-100 dark:border-[#3c3c3c] pt-4">
                     <div class="space-y-2">
                         <label class="block text-sm font-bold text-gray-700 dark:text-[#858585] flex items-center gap-1">
+                            <span class="material-icons text-sm">tune</span>
+                            <span class="i18n" data-ko="성능 및 CPU 제한 설정" data-en="Performance & CPU Limit">성능 및 CPU 제한 설정</span>
+                        </label>
+                        <select id="cpuWorkerInput" class="w-full p-2 text-xs border dark:border-[#3c3c3c] dark:bg-[#3c3c3c] dark:text-[#fff] rounded bg-white focus:outline-none font-medium">
+                            <option value="1" class="i18n" data-ko="저사양/저소음 모드 (CPU 코어 1개 제한 - 서핑 가능)" data-en="Low CPU Mode (1 Core - Smooth multitasking)">저사양/저소음 모드 (CPU 코어 1개 제한 - 서핑 가능)</option>
+                            <option value="2" selected class="i18n" data-ko="밸런스 모드 (CPU 코어 2개 사용 - 추천)" data-en="Balanced Mode (2 Cores - Recommended)">밸런스 모드 (CPU 코어 2개 사용 - 추천)</option>
+                            <option value="4" class="i18n" data-ko="초고속 터보 모드 (CPU 코어 4개 풀가동 - 일시적 버벅임 유발)" data-en="Turbo Mode (4 Cores Max - May cause temporary lag)">초고속 터보 모드 (CPU 코어 4개 풀가동 - 일시적 버벅임 유발)</option>
+                        </select>
+                    </div>
+
+                    <div class="space-y-2">
+                        <label class="block text-sm font-bold text-gray-700 dark:text-[#858585] flex items-center gap-1">
                             <span class="material-icons text-sm">schedule</span>
                             <span class="i18n" data-ko="추출 시간대 설정" data-en="Time Range Settings">추출 시간대 설정</span>
                         </label>
@@ -180,16 +192,17 @@
                             </div>
                         </div>
                     </div>
-                    <div class="flex flex-col justify-center text-right text-xs text-gray-500 dark:text-[#858585] space-y-1">
-                        <p id="infoDuration" class="font-medium">영상 총 길이: -</p>
-                        <p id="infoResolution" class="font-medium">영상 원본 해상도: -</p>
-                    </div>
+                </div>
+
+                <div class="w-full text-right text-xs text-gray-500 dark:text-[#858585] border-t dark:border-[#3c3c3c] pt-2">
+                    <span id="infoDuration" class="font-medium mr-4">영상 총 길이: -</span>
+                    <span id="infoResolution" class="font-medium">영상 원본 해상도: -</span>
                 </div>
             </div>
 
             <div id="progressContainer" class="hidden bg-gray-50 dark:bg-[#1e1e1e] p-4 rounded-xl border dark:border-[#3c3c3c]">
                 <div class="flex justify-between text-sm mb-1">
-                    <span class="font-bold text-indigo-600 dark:text-[#007acc]" id="progressStatus">정밀 프레임 스캔 엔진 기동 중...</span>
+                    <span class="font-bold text-indigo-600 dark:text-[#007acc] flex items-center gap-1" id="progressStatus">정밀 프레임 스캔 엔진 기동 중...</span>
                     <span class="font-bold text-indigo-600 dark:text-[#007acc]" id="progressText">0%</span>
                 </div>
                 <div class="w-full bg-gray-200 dark:bg-[#3c3c3c] rounded-full h-3 overflow-hidden">
@@ -250,6 +263,7 @@
         const endTime = document.getElementById('endTime');
         const fpsInput = document.getElementById('fpsInput');
         const qualityInput = document.getElementById('qualityInput');
+        const cpuWorkerInput = document.getElementById('cpuWorkerInput');
 
         const convertBtn = document.getElementById('convertBtn');
         const progressContainer = document.getElementById('progressContainer');
@@ -462,6 +476,8 @@
             const end = parseFloat(endTime.value) || videoDuration;
             const fps = parseInt(fpsInput.value) || 10;
             const sampleInterval = parseInt(qualityInput.value) || 3;
+            // 유저가 선택한 CPU 연산 스레드 수 동적 수집
+            const workerCount = parseInt(cpuWorkerInput.value) || 2; 
 
             const duration = end - start;
             if (duration <= 0) {
@@ -498,7 +514,6 @@
 
                 ctx.drawImage(videoPreview, cX, cY, cW, cH, 0, 0, finalW, finalH);
                 
-                // [메모리 최적화 핵심]: 자바스크립트 엔진 메모리를 우회하기 위해 Blob 바이너리 구조로 캡처
                 await new Promise((resolve) => {
                     captureCanvas.toBlob((blob) => {
                         const blobUrl = URL.createObjectURL(blob);
@@ -510,13 +525,14 @@
                 const progressPercent = Math.round((i / totalFrames) * 50);
                 progressBar.style.width = progressPercent + '%';
                 progressText.innerText = progressPercent + '%';
-                progressStatus.innerText = currentLang === 'ko' ? `🎬 고속 프레임 크롭 중... (${i + 1}/${totalFrames})` : `🎬 Extracting frames... (${i + 1}/${totalFrames})`;
+                
+                progressStatus.innerHTML = `<span class="material-icons text-sm mr-1">movie</span><span>${currentLang === 'ko' ? `고속 프레임 크롭 중... (${i + 1}/${totalFrames})` : `Extracting frames... (${i + 1}/${totalFrames})`}</span>`;
 
                 currentSeekTime += interval;
             }
 
-            // 2단계: gifshot 데이터 렌더링 단계
-            progressStatus.innerText = currentLang === 'ko' ? "⏳ 고프레임 GIF 데이터 빌드 및 인코딩 압축 중..." : "⏳ Building GIF data and compressing...";
+            // 2단계: gifshot 데이터 렌더링 단계 (동적 numWorkers 설정 반영)
+            progressStatus.innerHTML = `<span class="material-icons text-sm mr-1 animate-spin">hourglass_empty</span><span>${currentLang === 'ko' ? "고프레임 GIF 데이터 빌드 및 인코딩 압축 중..." : "Building GIF data and compressing..."}</span>`;
             
             gifshot.createGIF({
                 images: frameImages,
@@ -524,14 +540,13 @@
                 gifWidth: finalW,
                 gifHeight: finalH,
                 sampleInterval: sampleInterval,
-                numWorkers: 4,
+                numWorkers: workerCount, // 유저 세팅 대입하여 CPU 코어 사용 한도 제어
                 progressCallback: function(progress) {
                     const progressPercent = 50 + Math.round(progress * 50);
                     progressBar.style.width = progressPercent + '%';
                     progressText.innerText = progressPercent + '%';
                 }
             }, function(obj) {
-                // [메모리 해제 핵심]: 인코딩 성공 여부와 무관하게 사용이 끝난 수백 장의 Blob 가상 URL을 브라우저 메모리에서 영구 제거
                 frameImages.forEach(url => URL.revokeObjectURL(url));
 
                 convertBtn.disabled = false;
@@ -541,11 +556,12 @@
                     gifResult.src = obj.image;
                     downloadBtn.href = obj.image;
                     downloadBtn.download = `cropped_output_${fps}fps.gif`;
-                    progressStatus.innerText = currentLang === 'ko' ? "🎉 GIF 변환 완벽 성공!" : "🎉 GIF Conversion Successful!";
+                    
+                    progressStatus.innerHTML = `<span class="material-icons text-sm mr-1 text-emerald-500">celebration</span><span>${currentLang === 'ko' ? "GIF 변환 완벽 성공!" : "GIF Conversion Successful!"}</span>`;
                     resultContainer.classList.remove('hidden');
                 } else {
                     alert((currentLang === 'ko' ? '인코딩 도중 에러가 발생했습니다: ' : 'An error occurred during encoding: ') + obj.errorMsg);
-                    progressStatus.innerText = currentLang === 'ko' ? "변환 실패" : "Conversion Failed";
+                    progressStatus.innerHTML = `<span class="material-icons text-sm mr-1 text-red-500">error</span><span>${currentLang === 'ko' ? "변환 실패" : "Conversion Failed"}</span>`;
                 }
             });
         });

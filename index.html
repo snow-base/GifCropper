@@ -8,7 +8,6 @@
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/gifshot@0.4.5/dist/gifshot.min.js"></script>
-    
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
     
     <script>
@@ -17,7 +16,6 @@
         }
     </script>
     <style>
-        /* 머테리얼 아이콘과 텍스트의 정렬을 위한 전역 보정 */
         .material-icons {
             vertical-align: middle;
             line-height: 1;
@@ -79,7 +77,7 @@
 
                 <div class="mt-3 flex justify-center space-x-2">
                     <button id="toggleCropModeBtn" class="bg-indigo-600 hover:bg-indigo-700 dark:bg-[#007acc] dark:hover:bg-[#0062a3] text-white font-bold text-xs py-2 px-4 rounded transition flex items-center justify-center gap-1">
-                        </button>
+                    </button>
                     <button id="resetCropBtn" class="bg-gray-600 hover:bg-gray-700 dark:bg-[#3c3c3c] dark:hover:bg-[#4f4f4f] text-white font-bold text-xs py-2 px-4 rounded transition flex items-center justify-center gap-1">
                         <span class="material-icons text-xs">refresh</span>
                         <span class="i18n" data-ko="전체 화면으로 리셋" data-en="Reset to Full Screen">전체 화면으로 리셋</span>
@@ -232,7 +230,6 @@
         let currentLang = localStorage.getItem('lang') || 'ko';
         let currentTheme = localStorage.getItem('theme') || 'light';
 
-        // DOM 원소 매핑
         const videoInput = document.getElementById('videoInput');
         const videoPreview = document.getElementById('videoPreview');
         const controlPanel = document.getElementById('controlPanel');
@@ -490,6 +487,7 @@
 
             videoPreview.pause();
 
+            // 1단계: 프레임 크롭 추출 단계
             for (let i = 0; i < totalFrames; i++) {
                 if (currentSeekTime > videoDuration) break;
 
@@ -499,7 +497,15 @@
                 });
 
                 ctx.drawImage(videoPreview, cX, cY, cW, cH, 0, 0, finalW, finalH);
-                frameImages.push(captureCanvas.toDataURL('image/jpeg', 0.85));
+                
+                // [메모리 최적화 핵심]: 자바스크립트 엔진 메모리를 우회하기 위해 Blob 바이너리 구조로 캡처
+                await new Promise((resolve) => {
+                    captureCanvas.toBlob((blob) => {
+                        const blobUrl = URL.createObjectURL(blob);
+                        frameImages.push(blobUrl);
+                        resolve();
+                    }, 'image/jpeg', 0.85);
+                });
 
                 const progressPercent = Math.round((i / totalFrames) * 50);
                 progressBar.style.width = progressPercent + '%';
@@ -509,6 +515,7 @@
                 currentSeekTime += interval;
             }
 
+            // 2단계: gifshot 데이터 렌더링 단계
             progressStatus.innerText = currentLang === 'ko' ? "⏳ 고프레임 GIF 데이터 빌드 및 인코딩 압축 중..." : "⏳ Building GIF data and compressing...";
             
             gifshot.createGIF({
@@ -524,6 +531,9 @@
                     progressText.innerText = progressPercent + '%';
                 }
             }, function(obj) {
+                // [메모리 해제 핵심]: 인코딩 성공 여부와 무관하게 사용이 끝난 수백 장의 Blob 가상 URL을 브라우저 메모리에서 영구 제거
+                frameImages.forEach(url => URL.revokeObjectURL(url));
+
                 convertBtn.disabled = false;
                 convertBtn.classList.remove('opacity-50');
 

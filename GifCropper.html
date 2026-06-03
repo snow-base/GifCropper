@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GIF 크롭퍼 - 간편한 움짤 변환기</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gifshot/0.4.5/gifshot.min.js"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class'
+        }
+    </script>
+</head>
+<body class="bg-gray-100 text-gray-800 dark:bg-[#1e1e1e] dark:text-[#d4d4d4] min-h-screen py-10 px-4 transition-colors duration-200">
+
+    <div class="max-w-4xl mx-auto bg-white dark:bg-[#252526] rounded-xl shadow-lg dark:shadow-2xl p-6 border dark:border-[#3c3c3c] transition-colors duration-200">
+        
+        <div class="flex justify-end space-x-3 mb-4 text-xs">
+            <div class="flex items-center bg-gray-100 dark:bg-[#2d2d2d] p-1 rounded-lg border border-gray-200 dark:border-[#3c3c3c] shadow-sm">
+                <button id="langKoBtn" class="px-2 py-1 rounded font-bold transition-all bg-indigo-600 text-white">KO</button>
+                <button id="langEnBtn" class="px-2 py-1 rounded font-bold transition-all text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-[#3c3c3c]">EN</button>
+            </div>
+            <button id="themeToggleBtn" class="flex items-center space-x-1 bg-gray-100 dark:bg-[#2d2d2d] px-3 py-1 rounded-lg border border-gray-200 dark:border-[#3c3c3c] shadow-sm font-bold text-gray-600 dark:text-[#c5c5c5] hover:bg-gray-200 dark:hover:bg-[#3c3c3c] transition">
+                <span id="themeIcon">🌙</span>
+                <span id="themeText" class="i18n" data-ko="다크 모드" data-en="Dark Mode">다크 모드</span>
+            </button>
+        </div>
+
+        <h1 id="mainTitle" class="text-3xl font-extrabold text-center text-indigo-600 dark:text-[#007acc] mb-2 i18n" data-ko="📹 GIF 크롭퍼 (GIF Cropper)" data-en="📹 GIF Cropper">📹 GIF 크롭퍼 (GIF Cropper)</h1>
+        <p id="subTitle" class="text-center text-sm text-gray-500 dark:text-[#858585] mb-6 i18n" data-ko="원하는 동영상 영역만 마우스로 드래그하여 고화질 GIF 움짤로 변환하세요" data-en="Drag your mouse to select an area and convert videos into high-quality GIFs.">원하는 동영상 영역만 마우스로 드래그하여 고화질 GIF 움짤로 변환하세요</p>
+        
+        <div class="border-4 border-dashed border-gray-200 dark:border-[#3c3c3c] rounded-lg p-6 text-center hover:border-indigo-400 dark:hover:border-[#007acc] transition cursor-pointer mb-6">
+            <input type="file" id="videoInput" accept="video/*" class="hidden">
+            <label for="videoInput" class="cursor-pointer block">
+                <span class="text-indigo-500 dark:text-[#007acc] font-bold block mb-2 i18n" data-ko="📥 클릭하여 동영상 파일 선택" data-en="📥 Click to select a video file">📥 클릭하여 동영상 파일 선택</span>
+                <span class="text-xs text-gray-400 dark:text-[#858585] i18n" data-ko="MP4, WebM, MOV 등 지원" data-en="Supports MP4, WebM, MOV, etc.">MP4, WebM, MOV 등 지원</span>
+            </label>
+        </div>
+
+        <div id="controlPanel" class="hidden space-y-6">
+            
+            <div class="bg-gray-900 dark:bg-[#1e1e1e] p-4 rounded-xl text-center shadow-inner border dark:border-[#3c3c3c]">
+                <span class="block text-xs font-semibold text-gray-400 dark:text-[#858585] mb-2 text-left i18n" data-ko="📺 영상 미리보기 & 자르기 범위 설정" data-en="📺 Video Preview & Crop Range Settings">📺 영상 미리보기 & 자르기 범위 설정</span>
+                
+                <div class="relative inline-block overflow-hidden rounded bg-black select-none" id="videoWrapper">
+                    <video id="videoPreview" controls class="max-h-[450px] block"></video>
+                    
+                    <div id="cropOverlay" class="absolute top-0 left-0 w-full h-full cursor-crosshair hidden bg-black/10"></div>
+                    
+                    <div id="cropBox" class="absolute border-2 border-dashed border-red-500 bg-red-500/20 pointer-events-none hidden">
+                        <span class="absolute top-1 left-1 bg-red-600 text-white text-[10px] px-1 rounded opacity-80 i18n" data-ko="🔥 잘라낼 영역" data-en="🔥 Crop Area">🔥 잘라낼 영역</span>
+                    </div>
+                </div>
+
+                <div class="mt-3 flex justify-center space-x-2">
+                    <button id="toggleCropModeBtn" class="bg-indigo-600 hover:bg-indigo-700 dark:bg-[#007acc] dark:hover:bg-[#0062a3] text-white font-bold text-xs py-2 px-4 rounded transition">
+                        📐 마우스 드래그로 영역 지정하기 (켜기)
+                    </button>
+                    <button id="resetCropBtn" class="bg-gray-600 hover:bg-gray-700 dark:bg-[#3c3c3c] dark:hover:bg-[#4f4f4f] text-white font-bold text-xs py-2 px-4 rounded transition i18n" data-ko="🔄 전체 화면으로 리셋" data-en="🔄 Reset to Full Screen">
+                        🔄 전체 화면으로 리셋
+                    </button>
+                </div>
+                <p id="cropStatusText" class="text-xs text-amber-400 mt-1 hidden font-medium i18n" data-ko="⚠️ 비디오 화면 위를 드래그 앤 드롭 하세요!" data-en="⚠️ Click and drag over the video display!">⚠️ 비디오 화면 위를 드래그 앤 드롭 하세요!</p>
+            </div>
+
+            <div class="bg-indigo-50/50 dark:bg-[#1e1e1e] p-5 rounded-xl border border-indigo-100 dark:border-[#3c3c3c] grid grid-cols-1 md:grid-cols-2 gap-6 transition-colors duration-200">
+                
+                <div class="space-y-3 bg-white dark:bg-[#252526] p-4 rounded-lg border dark:border-[#3c3c3c]">
+                    <h3 class="text-sm font-bold text-indigo-900 dark:text-[#007acc] i18n" data-ko="✂️ 자르기(Crop) 좌표 및 크기" data-en="✂️ Crop Coordinates & Dimensions">✂️ 자르기(Crop) 좌표 및 크기</h3>
+                    <div class="grid grid-cols-2 gap-2 text-xs">
+                        <div>
+                            <label class="block text-gray-600 dark:text-[#858585] mb-1 i18n" data-ko="시작 X 좌표 (px)" data-en="Start X (px)">시작 X 좌표 (px)</label>
+                            <input type="number" id="cropX" value="0" class="w-full p-2 border dark:border-[#3c3c3c] dark:bg-[#3c3c3c] dark:text-[#fff] rounded font-mono focus:outline-none focus:border-indigo-500 dark:focus:border-[#007acc]">
+                        </div>
+                        <div>
+                            <label class="block text-gray-600 dark:text-[#858585] mb-1 i18n" data-ko="시작 Y 좌표 (px)" data-en="Start Y (px)">시작 Y 좌표 (px)</label>
+                            <input type="number" id="cropY" value="0" class="w-full p-2 border dark:border-[#3c3c3c] dark:bg-[#3c3c3c] dark:text-[#fff] rounded font-mono focus:outline-none focus:border-indigo-500 dark:focus:border-[#007acc]">
+                        </div>
+                        <div>
+                            <label class="block text-gray-600 dark:text-[#858585] mb-1 i18n" data-ko="자를 가로 폭 (Width)" data-en="Crop Width (px)">자를 가로 폭 (Width)</label>
+                            <input type="number" id="cropW" class="w-full p-2 border dark:border-[#3c3c3c] dark:bg-[#3c3c3c] dark:text-[#fff] rounded font-mono focus:outline-none focus:border-indigo-500 dark:focus:border-[#007acc]">
+                        </div>
+                        <div>
+                            <label class="block text-gray-600 dark:text-[#858585] mb-1 i18n" data-ko="자를 세로 높이 (Height)" data-en="Crop Height (px)">자를 세로 높이 (Height)</label>
+                            <input type="number" id="cropH" class="w-full p-2 border dark:border-[#3c3c3c] dark:bg-[#3c3c3c] dark:text-[#fff] rounded font-mono focus:outline-none focus:border-indigo-500 dark:focus:border-[#007acc]">
+                        </div>
+                    </div>
+                    <p class="text-[11px] text-gray-400 dark:text-[#6a6a6a] i18n" data-ko="※ 동영상의 실제 원본 해상도 기준 픽셀 좌표값입니다." data-en="※ Coordinates are based on the video's native resolution.">※ 동영상의 실제 원본 해상도 기준 픽셀 좌표값입니다.</p>
+                </div>
+
+                <div class="space-y-4 bg-white dark:bg-[#252526] p-4 rounded-lg border dark:border-[#3c3c3c]">
+                    <h3 class="text-sm font-bold text-indigo-900 dark:text-[#007acc] i18n" data-ko="⚙️ 출력 GIF 설정" data-en="⚙️ Output GIF Settings">⚙️ 출력 GIF 설정</h3>
+                    
+                    <div class="grid grid-cols-2 gap-3 text-xs">
+                        <div>
+                            <label class="block text-gray-700 dark:text-[#858585] font-semibold mb-1 i18n" data-ko="최종 GIF 가로 크기" data-en="Final GIF Width">최종 GIF 가로 크기</label>
+                            <input type="number" id="outWidth" class="w-full p-2 border dark:border-[#3c3c3c] dark:bg-[#3c3c3c] dark:text-[#fff] rounded text-center font-bold focus:outline-none focus:border-indigo-500 dark:focus:border-[#007acc]">
+                        </div>
+                        <div>
+                            <label class="block text-gray-700 dark:text-[#858585] font-semibold mb-1 i18n" data-ko="최종 GIF 세로 크기" data-en="Final GIF Height">최종 GIF 세로 크기</label>
+                            <input type="number" id="outHeight" class="w-full p-2 border dark:border-[#3c3c3c] dark:bg-[#3c3c3c] dark:text-[#fff] rounded text-center font-bold focus:outline-none focus:border-indigo-500 dark:focus:border-[#007acc]">
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-3 text-xs">
+                        <div>
+                            <label class="block text-gray-700 dark:text-[#858585] font-semibold mb-1 i18n" data-ko="프레임 레이트 (FPS)" data-en="Frame Rate (FPS)">프레임 레이트 (FPS)</label>
+                            <select id="fpsInput" class="w-full p-2 border dark:border-[#3c3c3c] dark:bg-[#3c3c3c] dark:text-[#fff] rounded bg-white font-medium focus:outline-none">
+                                <option value="60" class="i18n" data-ko="60 FPS (초고프레임)" data-en="60 FPS (Ultra Smooth)">60 FPS (초고프레임)</option>
+                                <option value="50" class="i18n" data-ko="50 FPS (고프레임)" data-en="50 FPS (High Smooth)">50 FPS (고프레임)</option>
+                                <option value="30" class="i18n" data-ko="30 FPS (표준 화질)" data-en="30 FPS (Standard HD)">30 FPS (표준 화질)</option>
+                                <option value="24" class="i18n" data-ko="24 FPS (시네마틱)" data-en="24 FPS (Cinematic Style)">24 FPS (시네마틱)</option>
+                                <option value="15" class="i18n" data-ko="15 FPS (일반 움짤)" data-en="15 FPS (Standard GIF)">15 FPS (일반 움짤)</option>
+                                <option value="12" class="i18n" data-ko="12 FPS (애니메이션)" data-en="12 FPS (Animation Style)">12 FPS (애니메이션)</option>
+                                <option value="10" selected class="i18n" data-ko="10 FPS (용량 최적화)" data-en="10 FPS (Size Optimized)">10 FPS (용량 최적화)</option>
+                                <option value="5" class="i18n" data-ko="5 FPS (초저용량)" data-en="5 FPS (Low-size)">5 FPS (초저용량)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-gray-700 dark:text-[#858585] font-semibold mb-1 i18n" data-ko="인코딩 화질 압축" data-en="Encoding Quality">인코딩 화질 압축</label>
+                            <select id="qualityInput" class="w-full p-2 border dark:border-[#3c3c3c] dark:bg-[#3c3c3c] dark:text-[#fff] rounded bg-white focus:outline-none">
+                                <option value="1" class="i18n" data-ko="최고 화질 (처리 느림)" data-en="Ultra Quality (Slow)">최고 화질 (처리 느림)</option>
+                                <option value="3" selected class="i18n" data-ko="고화질 밸런스 (추천)" data-en="High Quality (Recommended)">고화질 밸런스 (추천)</option>
+                                <option value="6" class="i18n" data-ko="일반 화질" data-en="Medium Quality">일반 화질</option>
+                                <option value="10" class="i18n" data-ko="낮은 화질 (용량 압축)" data-en="Low Quality (Small Size)">낮은 화질 (용량 압축)</option>
+                                <option value="15" class="i18n" data-ko="최대 압축 (최저 화질)" data-en="Max Compression">최대 압축 (최저 화질)</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="md:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-6 border-t border-indigo-100 dark:border-[#3c3c3c] pt-4">
+                    <div class="space-y-2">
+                        <label class="block text-sm font-bold text-gray-700 dark:text-[#858585] i18n" data-ko="⏱️ 추출 시간대 설정" data-en="⏱️ Time Range Settings">⏱️ 추출 시간대 설정</label>
+                        <div class="grid grid-cols-2 gap-3 text-xs">
+                            <div class="flex items-center bg-white dark:bg-[#3c3c3c] border border-gray-300 dark:border-[#555] rounded-lg shadow-sm focus-within:border-indigo-500 dark:focus-within:border-[#007acc] focus-within:ring-1 focus-within:ring-indigo-500 dark:focus-within:ring-[#007acc] overflow-hidden">
+                                <span class="bg-gray-50 dark:bg-[#2d2d2d] px-3 py-2 text-gray-500 dark:text-[#858585] border-r border-gray-300 dark:border-[#555] select-none shrink-0 i18n" data-ko="시작" data-en="Start">시작</span>
+                                <input type="number" id="startTime" step="0.1" value="0" class="w-full p-2 text-center font-mono bg-transparent text-gray-800 dark:text-[#fff] focus:outline-none">
+                                <span class="pr-3 text-gray-400 dark:text-[#6a6a6a] font-medium select-none shrink-0 i18n" data-ko="초" data-en="s">초</span>
+                            </div>
+                            <div class="flex items-center bg-white dark:bg-[#3c3c3c] border border-gray-300 dark:border-[#555] rounded-lg shadow-sm focus-within:border-indigo-500 dark:focus-within:border-[#007acc] focus-within:ring-1 focus-within:ring-indigo-500 dark:focus-within:ring-[#007acc] overflow-hidden">
+                                <span class="bg-gray-50 dark:bg-[#2d2d2d] px-3 py-2 text-gray-500 dark:text-[#858585] border-r border-gray-300 dark:border-[#555] select-none shrink-0 i18n" data-ko="종료" data-en="End">종료</span>
+                                <input type="number" id="endTime" step="0.1" value="2" class="w-full p-2 text-center font-mono bg-transparent text-gray-800 dark:text-[#fff] focus:outline-none">
+                                <span class="pr-3 text-gray-400 dark:text-[#6a6a6a] font-medium select-none shrink-0 i18n" data-ko="초" data-en="s">초</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="flex flex-col justify-center text-right text-xs text-gray-500 dark:text-[#858585] space-y-1">
+                        <p id="infoDuration" class="font-medium">영상 총 길이: -</p>
+                        <p id="infoResolution" class="font-medium">영상 원본 해상도: -</p>
+                    </div>
+                </div>
+            </div>
+
+            <div id="progressContainer" class="hidden bg-gray-50 dark:bg-[#1e1e1e] p-4 rounded-xl border dark:border-[#3c3c3c]">
+                <div class="flex justify-between text-sm mb-1">
+                    <span class="font-bold text-indigo-600 dark:text-[#007acc]" id="progressStatus">정밀 프레임 스캔 엔진 기동 중...</span>
+                    <span class="font-bold text-indigo-600 dark:text-[#007acc]" id="progressText">0%</span>
+                </div>
+                <div class="w-full bg-gray-200 dark:bg-[#3c3c3c] rounded-full h-3 overflow-hidden">
+                    <div id="progressBar" class="bg-indigo-600 dark:bg-[#007acc] h-full transition-all duration-75" style="width: 0%"></div>
+                </div>
+            </div>
+
+            <button id="convertBtn" class="w-full bg-indigo-600 hover:bg-indigo-700 dark:bg-[#007acc] dark:hover:bg-[#0062a3] text-white font-bold py-4 px-4 rounded-xl transition shadow-lg text-lg i18n" data-ko="🚀 지정한 영역만 크롭하여 고화질 GIF 생성" data-en="🚀 Crop Selected Area & Generate High-Quality GIF">
+                🚀 지정한 영역만 크롭하여 고화질 GIF 생성
+            </button>
+        </div>
+
+        <div id="resultContainer" class="hidden mt-8 border-t dark:border-[#3c3c3c] pt-6 text-center">
+            <h3 id="successTitle" class="text-xl font-bold text-gray-800 dark:text-[#fff] mb-3 i18n" data-ko="🎉 크롭 변환 성공!" data-en="🎉 Conversion Successful!">🎉 크롭 변환 성공!</h3>
+            <div class="flex justify-center mb-4">
+                <img id="gifResult" class="max-w-full rounded border dark:border-[#3c3c3c] shadow-md bg-stone-100 dark:bg-stone-900" alt="크롭된 GIF 결과물">
+            </div>
+            <a id="downloadBtn" class="inline-block bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-2 px-6 rounded-lg shadow transition i18n" data-ko="💾 완성된 GIF 저장하기" data-en="💾 Save Completed GIF">
+                💾 완성된 GIF 저장하기
+            </a>
+        </div>
+    </div>
+
+    <script>
+        let videoDuration = 0, originalWidth = 0, originalHeight = 0, videoUrl = '';
+        let isDragging = false, cropModeActive = false;
+        let startX = 0, startY = 0;
+        
+        let currentLang = localStorage.getItem('lang') || 'ko';
+        let currentTheme = localStorage.getItem('theme') || 'light';
+
+        // DOM 원소 매핑
+        const videoInput = document.getElementById('videoInput');
+        const videoPreview = document.getElementById('videoPreview');
+        const controlPanel = document.getElementById('controlPanel');
+        const cropOverlay = document.getElementById('cropOverlay');
+        const cropBox = document.getElementById('cropBox');
+        const toggleCropModeBtn = document.getElementById('toggleCropModeBtn');
+        const cropStatusText = document.getElementById('cropStatusText');
+        const resetCropBtn = document.getElementById('resetCropBtn');
+
+        const cropX = document.getElementById('cropX');
+        const cropY = document.getElementById('cropY');
+        const cropW = document.getElementById('cropW');
+        const cropH = document.getElementById('cropH');
+
+        const outWidth = document.getElementById('outWidth');
+        const outHeight = document.getElementById('outHeight');
+        const startTime = document.getElementById('startTime');
+        const endTime = document.getElementById('endTime');
+        const fpsInput = document.getElementById('fpsInput');
+        const qualityInput = document.getElementById('qualityInput');
+
+        const convertBtn = document.getElementById('convertBtn');
+        const progressContainer = document.getElementById('progressContainer');
+        const progressBar = document.getElementById('progressBar');
+        const progressText = document.getElementById('progressText');
+        const progressStatus = document.getElementById('progressStatus');
+        const resultContainer = document.getElementById('resultContainer');
+        const gifResult = document.getElementById('gifResult');
+        const downloadBtn = document.getElementById('downloadBtn');
+
+        const langKoBtn = document.getElementById('langKoBtn');
+        const langEnBtn = document.getElementById('langEnBtn');
+        const themeToggleBtn = document.getElementById('themeToggleBtn');
+        const themeIcon = document.getElementById('themeIcon');
+        const themeText = document.getElementById('themeText');
+
+        function updateLanguage(lang) {
+            currentLang = lang;
+            localStorage.setItem('lang', lang);
+            
+            if (lang === 'ko') {
+                langKoBtn.className = "px-2 py-1 rounded font-bold transition-all bg-indigo-600 text-white";
+                langEnBtn.className = "px-2 py-1 rounded font-bold transition-all text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-[#3c3c3c]";
+            } else {
+                langEnBtn.className = "px-2 py-1 rounded font-bold transition-all bg-indigo-600 text-white";
+                langKoBtn.className = "px-2 py-1 rounded font-bold transition-all text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-[#3c3c3c]";
+            }
+
+            document.querySelectorAll('.i18n').forEach(el => {
+                const targetText = el.getAttribute(`data-${lang}`);
+                if (targetText) el.textContent = targetText;
+            });
+
+            if (originalWidth && originalHeight) {
+                document.getElementById('infoDuration').innerText = lang === 'ko' ? `영상 총 길이: ${videoDuration.toFixed(2)}초` : `Total Duration: ${videoDuration.toFixed(2)}s`;
+                document.getElementById('infoResolution').innerText = lang === 'ko' ? `영상 원본 해상도: ${originalWidth} x ${originalHeight} px` : `Original Resolution: ${originalWidth} x ${originalHeight} px`;
+            }
+            toggleCropMode(cropModeActive);
+        }
+
+        function applyTheme(theme) {
+            currentTheme = theme;
+            localStorage.setItem('theme', theme);
+            if (theme === 'dark') {
+                document.documentElement.classList.add('dark');
+                themeIcon.innerText = "☀️";
+                themeText.setAttribute('data-ko', '라이트 모드');
+                themeText.setAttribute('data-en', 'Light Mode');
+            } else {
+                document.documentElement.classList.remove('dark');
+                themeIcon.innerText = "🌙";
+                themeText.setAttribute('data-ko', '다크 모드');
+                themeText.setAttribute('data-en', 'Dark Mode');
+            }
+            themeText.textContent = themeText.getAttribute(`data-${currentLang}`);
+        }
+
+        langKoBtn.addEventListener('click', () => updateLanguage('ko'));
+        langEnBtn.addEventListener('click', () => updateLanguage('en'));
+        themeToggleBtn.addEventListener('click', () => {
+            applyTheme(currentTheme === 'light' ? 'dark' : 'light');
+        });
+        
+        updateLanguage(currentLang);
+        applyTheme(currentTheme);
+
+        videoInput.addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            if (videoUrl) URL.revokeObjectURL(videoUrl);
+            videoUrl = URL.createObjectURL(file);
+            videoPreview.src = videoUrl;
+
+            videoPreview.onloadedmetadata = function() {
+                videoDuration = videoPreview.duration;
+                originalWidth = videoPreview.videoWidth;
+                originalHeight = videoPreview.videoHeight;
+
+                updateLanguage(currentLang);
+
+                cropX.value = 0;
+                cropY.value = 0;
+                cropW.value = originalWidth;
+                cropH.value = originalHeight;
+                
+                outWidth.value = originalWidth > 500 ? 500 : originalWidth; 
+                outHeight.value = Math.round((originalHeight / originalWidth) * outWidth.value);
+
+                startTime.value = 0;
+                endTime.value = Math.min(videoDuration, 2.0).toFixed(1);
+
+                controlPanel.classList.remove('hidden');
+                resultContainer.classList.add('hidden');
+                cropBox.classList.add('hidden');
+                toggleCropMode(false);
+            };
+        });
+
+        toggleCropModeBtn.addEventListener('click', function() {
+            toggleCropMode(!cropModeActive);
+        });
+
+        function toggleCropMode(active) {
+            cropModeActive = active;
+            if (cropModeActive) {
+                videoPreview.pause();
+                cropOverlay.classList.remove('hidden');
+                cropStatusText.classList.remove('hidden');
+                toggleCropModeBtn.innerText = currentLang === 'ko' ? "❌ 영역 지정 모드 종료" : "❌ Exit Crop Mode";
+                toggleCropModeBtn.className = "bg-red-600 hover:bg-red-700 text-white font-bold text-xs py-2 px-4 rounded transition";
+            } else {
+                cropOverlay.classList.add('hidden');
+                cropStatusText.classList.add('hidden');
+                toggleCropModeBtn.innerText = currentLang === 'ko' ? "📐 마우스 드래그로 영역 지정하기 (켜기)" : "📐 Enable Drag-to-Crop";
+                toggleCropModeBtn.className = "bg-indigo-600 hover:bg-indigo-700 dark:bg-[#007acc] dark:hover:bg-[#0062a3] text-white font-bold text-xs py-2 px-4 rounded transition";
+            }
+        }
+
+        resetCropBtn.addEventListener('click', function() {
+            cropX.value = 0;
+            cropY.value = 0;
+            cropW.value = originalWidth;
+            cropH.value = originalHeight;
+            outWidth.value = originalWidth > 500 ? 500 : originalWidth;
+            outHeight.value = Math.round((originalHeight / originalWidth) * outWidth.value);
+            cropBox.classList.add('hidden');
+            toggleCropMode(false);
+        });
+
+        cropOverlay.addEventListener('mousedown', function(e) {
+            isDragging = true;
+            const rect = cropOverlay.getBoundingClientRect();
+            startX = e.clientX - rect.left;
+            startY = e.clientY - rect.top;
+
+            cropBox.style.left = startX + 'px';
+            cropBox.style.top = startY + 'px';
+            cropBox.style.width = '0px';
+            cropBox.style.height = '0px';
+            cropBox.classList.remove('hidden');
+        });
+
+        cropOverlay.addEventListener('mousemove', function(e) {
+            if (!isDragging) return;
+            const rect = cropOverlay.getBoundingClientRect();
+            const currentX = e.clientX - rect.left;
+            const currentY = e.clientY - rect.top;
+
+            const x = Math.min(startX, currentX);
+            const y = Math.min(startY, currentY);
+            const w = Math.abs(startX - currentX);
+            const h = Math.abs(startY - currentY);
+
+            cropBox.style.left = x + 'px';
+            cropBox.style.top = y + 'px';
+            cropBox.style.width = w + 'px';
+            cropBox.style.height = h + 'px';
+
+            const scaleX = originalWidth / cropOverlay.clientWidth;
+            const scaleY = originalHeight / cropOverlay.clientHeight;
+
+            cropX.value = Math.round(x * scaleX);
+            cropY.value = Math.round(y * scaleY);
+            cropW.value = Math.round(w * scaleX);
+            cropH.value = Math.round(h * scaleY);
+            
+            outWidth.value = cropW.value;
+            outHeight.value = cropH.value;
+        });
+
+        cropOverlay.addEventListener('mouseup', function() {
+            isDragging = false;
+            toggleCropMode(false);
+        });
+
+        function syncBoxFromInputs() {
+            if (!originalWidth || !originalHeight) return;
+            const scaleX = videoPreview.clientWidth / originalWidth;
+            const scaleY = videoPreview.clientHeight / originalHeight;
+
+            const x = (parseInt(cropX.value) || 0) * scaleX;
+            const y = (parseInt(cropY.value) || 0) * scaleY;
+            const w = (parseInt(cropW.value) || originalWidth) * scaleX;
+            const h = (parseInt(cropH.value) || originalHeight) * scaleY;
+
+            cropBox.style.left = x + 'px';
+            cropBox.style.top = y + 'px';
+            cropBox.style.width = w + 'px';
+            cropBox.style.height = h + 'px';
+            cropBox.classList.remove('hidden');
+        }
+
+        [cropX, cropY, cropW, cropH].forEach(input => {
+            input.addEventListener('input', syncBoxFromInputs);
+        });
+
+        convertBtn.addEventListener('click', async function() {
+            if (!videoUrl) return;
+
+            const cX = parseInt(cropX.value) || 0;
+            const cY = parseInt(cropY.value) || 0;
+            const cW = parseInt(cropW.value) || originalWidth;
+            const cH = parseInt(cropH.value) || originalHeight;
+
+            const finalW = parseInt(outWidth.value) || cW;
+            const finalH = parseInt(outHeight.value) || cH;
+
+            const start = parseFloat(startTime.value) || 0;
+            const end = parseFloat(endTime.value) || videoDuration;
+            const fps = parseInt(fpsInput.value) || 10;
+            const sampleInterval = parseInt(qualityInput.value) || 3;
+
+            const duration = end - start;
+            if (duration <= 0) {
+                alert(currentLang === 'ko' ? '종료 시간을 시작 시간보다 크게 설정하세요.' : 'End time must be greater than start time.');
+                return;
+            }
+
+            const totalFrames = Math.floor(duration * fps);
+            const interval = 1 / fps;
+
+            progressContainer.classList.remove('hidden');
+            resultContainer.classList.add('hidden');
+            convertBtn.disabled = true;
+            convertBtn.classList.add('opacity-50');
+
+            const captureCanvas = document.createElement('canvas');
+            captureCanvas.width = finalW;
+            captureCanvas.height = finalH;
+            const ctx = captureCanvas.getContext('2d');
+
+            const frameImages = [];
+            let currentSeekTime = start;
+
+            videoPreview.pause();
+
+            for (let i = 0; i < totalFrames; i++) {
+                if (currentSeekTime > videoDuration) break;
+
+                await new Promise((resolve) => {
+                    videoPreview.currentTime = currentSeekTime;
+                    videoPreview.onseeked = resolve;
+                });
+
+                ctx.drawImage(videoPreview, cX, cY, cW, cH, 0, 0, finalW, finalH);
+                frameImages.push(captureCanvas.toDataURL('image/jpeg', 0.85));
+
+                const progressPercent = Math.round((i / totalFrames) * 50);
+                progressBar.style.width = progressPercent + '%';
+                progressText.innerText = progressPercent + '%';
+                progressStatus.innerText = currentLang === 'ko' ? `🎬 고속 프레임 크롭 중... (${i + 1}/${totalFrames})` : `🎬 Extracting frames... (${i + 1}/${totalFrames})`;
+
+                currentSeekTime += interval;
+            }
+
+            progressStatus.innerText = currentLang === 'ko' ? "⏳ 고프레임 GIF 데이터 빌드 및 인코딩 압축 중..." : "⏳ Building GIF data and compressing...";
+            
+            gifshot.createGIF({
+                images: frameImages,
+                interval: interval,
+                gifWidth: finalW,
+                gifHeight: finalH,
+                sampleInterval: sampleInterval,
+                numWorkers: 4,
+                progressCallback: function(progress) {
+                    const progressPercent = 50 + Math.round(progress * 50);
+                    progressBar.style.width = progressPercent + '%';
+                    progressText.innerText = progressPercent + '%';
+                }
+            }, function(obj) {
+                convertBtn.disabled = false;
+                convertBtn.classList.remove('opacity-50');
+
+                if (!obj.error) {
+                    gifResult.src = obj.image;
+                    downloadBtn.href = obj.image;
+                    downloadBtn.download = `cropped_output_${fps}fps.gif`;
+                    progressStatus.innerText = currentLang === 'ko' ? "🎉 GIF 변환 완벽 성공!" : "🎉 GIF Conversion Successful!";
+                    resultContainer.classList.remove('hidden');
+                } else {
+                    alert((currentLang === 'ko' ? '인코딩 도중 에러가 발생했습니다: ' : 'An error occurred during encoding: ') + obj.errorMsg);
+                    progressStatus.innerText = currentLang === 'ko' ? "변환 실패" : "Conversion Failed";
+                }
+            });
+        });
+    </script>
+</body>
+</html>

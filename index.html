@@ -256,16 +256,25 @@
 
                 const imgData = offscreenCtx.getImageData(0, 0, width, height);
                 
-                // 형변환 안정성 확보 및 정밀 RGBA 배열 추출
+                // 1. 브라우저 호환성을 위해 Uint8Array로 안전하게 래핑
                 const rgba = new Uint8Array(imgData.data.buffer);
                 
-                // 색상 깨짐 현상 해결: 'rgb565' 대신 완전한 RGBA 표준 채널인 'rgba8888' 매핑 적용
-                const format = 'rgba8888';
+                // 2. 투명도 채널 보정 (미세 알파값으로 인한 색상 양자화 글리치 차단)
+                for (let i = 3; i < rgba.length; i += 4) {
+                    rgba[i] = 255;
+                }
+                
+                // 3. gifenc 내장 최적화 포맷인 'rgb565' 기반 색상 분석 진행
+                const format = 'rgb565';
                 const palette = GIFEnc.quantize(rgba, 256, { format });
                 const indexMap = GIFEnc.applyPalette(rgba, palette, format);
 
+                // 4. 색상 왜곡 해결 핵심: 팔레트 버퍼 크기를 항상 디코더 표준 규격인 256색(768바이트)으로 완전 패딩
+                const finalPalette = new Uint8Array(256 * 3);
+                finalPalette.set(palette);
+
                 gifEncoder.writeFrame(indexMap, width, height, {
-                    palette: palette,
+                    palette: finalPalette,
                     delay: delayMs
                 });
 

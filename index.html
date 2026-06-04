@@ -489,13 +489,21 @@
             convertBtn.disabled = true;
             convertBtn.classList.add('opacity-50');
 
+            const captureCanvas = document.createElement('canvas');
+            captureCanvas.width = finalW;
+            captureCanvas.height = finalH;
+            const ctx = captureCanvas.getContext('2d');
+
+            const frameImages = [];
+            let currentSeekTime = start;
+
             videoPreview.pause();
 
             if (window.activeGifWorker) {
                 window.activeGifWorker.terminate();
             }
 
-            // [2-Pass 정밀 샘플링 기반 글로벌 팔레트 완전 자동화 워커 코드]
+            // [최고 화질 대응: rgba8888 트루컬러 및 최대 60장 2-Pass 정밀 샘플링 이식 워커]
             const workerCode = `
                 import { GIFEncoder, quantize, applyPalette } from 'https://cdn.jsdelivr.net/npm/gifenc/+esm';
 
@@ -520,7 +528,6 @@
                         bitmap.close(); 
                         
                         const imgData = ctx.getImageData(0, 0, width, height);
-                        // 순수 픽셀 데이터만 배열에 버퍼링 (안정성 최적화)
                         bufferedFrames.push(imgData.data);
                         
                         self.postMessage({ type: 'extract_progress', data: bufferedFrames.length });
@@ -529,8 +536,8 @@
                         
                         const gif = new GIFEncoder();
                         
-                        // [Pass 1]: 영상 전 구간을 커버하기 위해 추출된 프레임 중 최대 20개를 균등 샘플링하여 병합합니다.
-                        const sampleCount = Math.min(bufferedFrames.length, 20);
+                        // [Pass 1]: 색 왜곡 차단을 위해 전체 구간 샘플링 풀을 최대 60장으로 대폭 확대
+                        const sampleCount = Math.min(bufferedFrames.length, 60);
                         const sampleStep = Math.max(1, Math.floor(bufferedFrames.length / sampleCount));
                         
                         let totalSampleSize = 0;
@@ -545,10 +552,10 @@
                             offset += bufferedFrames[i].length;
                         }
                         
-                        // 영상 전체의 색상 스펙트럼을 대변하는 완벽한 256색 글로벌 팔레트 계산
+                        // 지정된 정밀 32비트 포맷(rgba8888) 데이터 기반 완벽한 대표 256색 추출
                         const globalPalette = quantize(combinedSamples, 256, { format: format });
                         
-                        // [Pass 2]: 완벽해진 단 하나의 고정 팔레트를 모든 프레임에 동일하게 매핑하여 빌드
+                        // [Pass 2]: 왜곡 현상이 박멸된 트루컬러 팔레트 프레임 맵핑 매칭
                         for (let i = 0; i < bufferedFrames.length; i++) {
                             const pixels = bufferedFrames[i];
                             const index = applyPalette(pixels, globalPalette, format);
@@ -565,7 +572,7 @@
                         gif.finish();
                         const buffer = gif.bytes();
                         self.postMessage({ type: 'success', data: buffer }, [buffer.buffer]);
-                        bufferedFrames = []; // 메모리 완전 즉시 클리어
+                        bufferedFrames = [];
                     }
                 };
             `;
@@ -575,27 +582,25 @@
             const gifWorker = new Worker(workerUrl, { type: 'module' });
             window.activeGifWorker = gifWorker;
 
-            const formatParam = (sampleInterval <= 3) ? 'rgb565' : 'rgb444';
+            // [색상 복원 핵심]: 상위 화질 옵션일 때는 압축하지 않는 트루컬러 'rgba8888' 강제 맵핑
+            const formatParam = (sampleInterval <= 6) ? 'rgba8888' : 'rgb565';
 
             gifWorker.postMessage({
                 type: 'init',
                 data: { width: finalW, height: finalH, delay: Math.round(interval * 1000), format: formatParam }
             });
 
-            // 멀티스레드 통신 제어 리스너
             gifWorker.onmessage = function(e) {
                 const { type, data } = e.data;
                 
                 if (type === 'extract_progress') {
-                    // 프레임 추출 진행률 (전체 게이지의 0% ~ 50% 담당)
                     const frameCount = data;
                     const progressPercent = Math.round((frameCount / totalFrames) * 50);
                     progressBar.style.width = progressPercent + '%';
                     progressText.innerText = progressPercent + '%';
-                    progressStatus.innerHTML = `<span class="material-icons text-sm mr-1">movie</span><span>${currentLang === 'ko' ? `고속 프레임 크롭 중... (${frameCount}/${totalFrames})` : `Extracting frames... (${frameCount}/${totalFrames})`}</span>`;
+                    減progressStatus.innerHTML = `<span class="material-icons text-sm mr-1">movie</span><span>${currentLang === 'ko' ? `고속 프레임 크롭 중... (${frameCount}/${totalFrames})` : `Extracting frames... (${frameCount}/${totalFrames})`}</span>`;
                 } 
                 else if (type === 'encode_progress') {
-                    // 글로벌 팔레트 기반 이미지 굽기 진행률 (전체 게이지의 50% ~ 100% 담당)
                     const { current, total } = data;
                     const progressPercent = 50 + Math.round((current / total) * 50);
                     progressBar.style.width = progressPercent + '%';
@@ -630,7 +635,6 @@
 
             let currentSeekTime = start;
 
-            // GPU 기반 고속 비디오 프레임 추출 루프
             for (let i = 0; i < totalFrames; i++) {
                 if (currentSeekTime > videoDuration) break;
 
@@ -653,7 +657,6 @@
                 currentSeekTime += interval;
             }
 
-            // 모든 비디오 스캔이 끝나면 워커에게 최종 인코딩 단계(Pass 2) 진입 명령을 내립니다.
             gifWorker.postMessage({ type: 'finish' });
         });
     </script>

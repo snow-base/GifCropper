@@ -251,30 +251,18 @@
 
                 offscreenCtx.clearRect(0, 0, width, height);
                 offscreenCtx.drawImage(bitmap, 0, 0);
-                
                 bitmap.close();
 
                 const imgData = offscreenCtx.getImageData(0, 0, width, height);
+                const rgba = imgData.data;
                 
-                // 1. 브라우저 호환성을 위해 Uint8Array로 안전하게 래핑
-                const rgba = new Uint8Array(imgData.data.buffer);
-                
-                // 2. 투명도 채널 보정 (미세 알파값으로 인한 색상 양자화 글리치 차단)
-                for (let i = 3; i < rgba.length; i += 4) {
-                    rgba[i] = 255;
-                }
-                
-                // 3. gifenc 내장 최적화 포맷인 'rgb565' 기반 색상 분석 진행
+                // gifenc 표준 포맷 및 최적화 엔진 완전 복구
                 const format = 'rgb565';
                 const palette = GIFEnc.quantize(rgba, 256, { format });
                 const indexMap = GIFEnc.applyPalette(rgba, palette, format);
 
-                // 4. 색상 왜곡 해결 핵심: 팔레트 버퍼 크기를 항상 디코더 표준 규격인 256색(768바이트)으로 완전 패딩
-                const finalPalette = new Uint8Array(256 * 3);
-                finalPalette.set(palette);
-
                 gifEncoder.writeFrame(indexMap, width, height, {
-                    palette: finalPalette,
+                    palette: palette,
                     delay: delayMs
                 });
 
@@ -284,7 +272,6 @@
             if (msg.type === 'FINISH') {
                 gifEncoder.finish();
                 const rawBytes = gifEncoder.bytes();
-                
                 self.postMessage({ type: 'SUCCESS', buffer: rawBytes }, [rawBytes.buffer]);
             }
         };
@@ -593,6 +580,10 @@
                     videoPreview.currentTime = currentSeekTime;
                     videoPreview.onseeked = resolve;
                 });
+
+                // [핵심 수정] 브라우저가 화면 버퍼(GPU 텍스처)를 완벽하게 그릴 시간을 확보해 줍니다.
+                // 이 대기가 없으면 반쯤 디코딩되어 깨진 스프라이트나 깨진 색상 버퍼가 강제 캡처됩니다.
+                await new Promise(r => setTimeout(r, 40));
 
                 const imageBitmap = await createImageBitmap(videoPreview, cX, cY, cW, cH, {
                     resizeWidth: finalW,

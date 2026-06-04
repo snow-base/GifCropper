@@ -7,7 +7,6 @@
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>✂️</text></svg>">
     
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/gifshot@0.4.5/dist/gifshot.min.js"></script>
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
     
     <script>
@@ -165,13 +164,12 @@
                     <div class="space-y-2">
                         <label class="block text-sm font-bold text-gray-700 dark:text-[#858585] flex items-center gap-1">
                             <span class="material-icons text-sm">tune</span>
-                            <span class="i18n" data-ko="성능 및 CPU 제한 설정" data-en="Performance & CPU Limit">성능 및 CPU 제한 설정</span>
+                            <span class="i18n" data-ko="백그라운드 비동기 스레딩 엔진 커널" data-en="Background Asynchronous Threading Engine">백그라운드 비동기 스레딩 엔진 커널</span>
                         </label>
-                        <select id="cpuWorkerInput" class="w-full p-2 text-xs border dark:border-[#3c3c3c] dark:bg-[#3c3c3c] dark:text-[#fff] rounded bg-white focus:outline-none font-medium">
-                            <option value="1" class="i18n" data-ko="저사양/저소음 모드 (CPU 코어 1개 제한 - 서핑 가능)" data-en="Low CPU Mode (1 Core - Smooth multitasking)">저사양/저소음 모드 (CPU 코어 1개 제한 - 서핑 가능)</option>
-                            <option value="2" selected class="i18n" data-ko="밸런스 모드 (CPU 코어 2개 사용 - 추천)" data-en="Balanced Mode (2 Cores - Recommended)">밸런스 모드 (CPU 코어 2개 사용 - 추천)</option>
-                            <option value="4" class="i18n" data-ko="초고속 터보 모드 (CPU 코어 4개 풀가동 - 일시적 버벅임 유발)" data-en="Turbo Mode (4 Cores Max - May cause temporary lag)">초고속 터보 모드 (CPU 코어 4개 풀가동 - 일시적 버벅임 유발)</option>
-                        </select>
+                        <div class="p-2 border dark:border-[#3c3c3c] dark:bg-[#2d2d2d] rounded text-xs text-indigo-600 dark:text-[#007acc] font-medium flex items-center gap-1 select-none">
+                            <span class="material-icons text-sm">memory</span>
+                            <span class="i18n" data-ko="Web Worker 및 OffscreenCanvas 하드웨어 가속이 활성화되었습니다." data-en="Web Worker & OffscreenCanvas Hardware Acceleration Enabled.">Web Worker 및 OffscreenCanvas 하드웨어 가속이 활성화되었습니다.</span>
+                        </div>
                     </div>
 
                     <div class="space-y-2">
@@ -263,7 +261,6 @@
         const endTime = document.getElementById('endTime');
         const fpsInput = document.getElementById('fpsInput');
         const qualityInput = document.getElementById('qualityInput');
-        const cpuWorkerInput = document.getElementById('cpuWorkerInput');
 
         const convertBtn = document.getElementById('convertBtn');
         const progressContainer = document.getElementById('progressContainer');
@@ -461,6 +458,7 @@
             input.addEventListener('input', syncBoxFromInputs);
         });
 
+        // [비동기 멀티스레딩 Web Worker + OffscreenCanvas 변환 코어 엔진]
         convertBtn.addEventListener('click', async function() {
             if (!videoUrl) return;
 
@@ -476,8 +474,6 @@
             const end = parseFloat(endTime.value) || videoDuration;
             const fps = parseInt(fpsInput.value) || 10;
             const sampleInterval = parseInt(qualityInput.value) || 3;
-            // 유저가 선택한 CPU 연산 스레드 수 동적 수집
-            const workerCount = parseInt(cpuWorkerInput.value) || 2; 
 
             const duration = end - start;
             if (duration <= 0) {
@@ -493,17 +489,118 @@
             convertBtn.disabled = true;
             convertBtn.classList.add('opacity-50');
 
-            const captureCanvas = document.createElement('canvas');
-            captureCanvas.width = finalW;
-            captureCanvas.height = finalH;
-            const ctx = captureCanvas.getContext('2d');
-
-            const frameImages = [];
-            let currentSeekTime = start;
-
             videoPreview.pause();
 
-            // 1단계: 프레임 크롭 추출 단계
+            // 기존 활성화된 인코딩 워커가 존재한다면 비동기 클린업 종료
+            if (window.activeGifWorker) {
+                window.activeGifWorker.terminate();
+            }
+
+            // 인라인 Web Worker 소스 빌드 (V8 최적화 차세대 gifenc 엔진 이식)
+            const workerCode = `
+                import { GIFEncoder, quantize, applyPalette } from 'https://cdn.jsdelivr.net/npm/gifenc/+esm';
+
+                let gif = null;
+                let width, height, delay;
+                let framesProcessed = 0;
+
+                self.onmessage = async function(e) {
+                    const { type, data } = e.data;
+                    
+                    if (type === 'init') {
+                        width = data.width;
+                        height = data.height;
+                        delay = data.delay;
+                        gif = new GIFEncoder();
+                        framesProcessed = 0;
+                    } else if (type === 'frame') {
+                        const { bitmap, format } = data;
+                        
+                        // 화면 버벅임이 0%에 수렴하는 OffscreenCanvas 백그라운드 드로잉
+                        const canvas = new OffscreenCanvas(width, height);
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(bitmap, 0, 0, width, height);
+                        bitmap.close(); // 메인 스레드 계열 GPU 비트맵 포인터 즉시 해제
+                        
+                        const imgData = ctx.getImageData(0, 0, width, height);
+                        const pixels = imgData.data;
+                        
+                        // 고속 컬러 디코딩 연산 및 압축 알고리즘 기동
+                        const palette = quantize(pixels, 256, { format: format });
+                        const index = applyPalette(pixels, palette, format);
+                        
+                        gif.writeFrame(index, width, height, {
+                            palette,
+                            delay: delay,
+                            repeat: 0
+                        });
+                        
+                        framesProcessed++;
+                        self.postMessage({ type: 'progress', data: framesProcessed });
+                    } else if (type === 'finish') {
+                        gif.finish();
+                        const buffer = gif.bytes();
+                        // Transferable을 통해 버퍼 데이터를 복사 비용 없이 메인 스레드로 워프 이송
+                        self.postMessage({ type: 'success', data: buffer }, [buffer.buffer]);
+                    }
+                };
+            `;
+
+            const blob = new Blob([workerCode], { type: 'application/javascript' });
+            const workerUrl = URL.createObjectURL(blob);
+            // 최신 브라우저 모듈 규격 멀티스레드 인스턴스 생성
+            const gifWorker = new Worker(workerUrl, { type: 'module' });
+            window.activeGifWorker = gifWorker;
+
+            // 화질 수치에 따라 엔진 고속 압축 모드 분기 지정 (rgb565 고화질 vs rgb444 경량 저부하)
+            const formatParam = (sampleInterval <= 3) ? 'rgb565' : 'rgb444';
+
+            // 워커 측 스트림 파일 헤더 초기화
+            gifWorker.postMessage({
+                type: 'init',
+                data: { width: finalW, height: height = finalH, delay: Math.round(interval * 1000) }
+            });
+
+            // 스레드 통신 수신용 비동기 리스너 매핑
+            gifWorker.onmessage = function(e) {
+                const { type, data } = e.data;
+                if (type === 'progress') {
+                    const encodedCount = data;
+                    // 후반부 50% ~ 100% 진행률을 워커 인코딩 진척도로 정밀 반영
+                    const progressPercent = 50 + Math.round((encodedCount / totalFrames) * 50);
+                    progressBar.style.width = progressPercent + '%';
+                    progressText.innerText = progressPercent + '%';
+                    progressStatus.innerHTML = `<span class="material-icons text-sm mr-1 animate-spin">hourglass_empty</span><span>${currentLang === 'ko' ? `고프레임 GIF 데이터 빌드 및 인코딩 압축 중... (${encodedCount}/${totalFrames})` : `Building GIF data and compressing... (${encodedCount}/${totalFrames})`}</span>`;
+                } else if (type === 'success') {
+                    const buffer = data;
+                    const resultBlob = new Blob([buffer], { type: 'image/gif' });
+                    const gifUrl = URL.createObjectURL(resultBlob);
+                    
+                    convertBtn.disabled = false;
+                    convertBtn.classList.remove('opacity-50');
+
+                    gifResult.src = gifUrl;
+                    downloadBtn.href = gifUrl;
+                    downloadBtn.download = `cropped_output_${fps}fps.gif`;
+                    
+                    progressStatus.innerHTML = `<span class="material-icons text-sm mr-1 text-emerald-500">celebration</span><span>${currentLang === 'ko' ? "GIF 변환 완벽 성공!" : "GIF Conversion Successful!"}</span>`;
+                    resultContainer.classList.remove('hidden');
+                    
+                    // 사용이 끝난 메모리 가상 URL 자원 파괴 해제
+                    URL.revokeObjectURL(workerUrl);
+                }
+            };
+
+            gifWorker.onerror = function(err) {
+                alert("Background Engine Thread Error: " + err.message);
+                convertBtn.disabled = false;
+                convertBtn.classList.remove('opacity-50');
+                progressStatus.innerText = "변환 실패";
+            };
+
+            let currentSeekTime = start;
+
+            // 1단계: 하드웨어 가속 비디오 프레임 가로채기 (0% ~ 50%)
             for (let i = 0; i < totalFrames; i++) {
                 if (currentSeekTime > videoDuration) break;
 
@@ -512,58 +609,29 @@
                     videoPreview.onseeked = resolve;
                 });
 
-                ctx.drawImage(videoPreview, cX, cY, cW, cH, 0, 0, finalW, finalH);
-                
-                await new Promise((resolve) => {
-                    captureCanvas.toBlob((blob) => {
-                        const blobUrl = URL.createObjectURL(blob);
-                        frameImages.push(blobUrl);
-                        resolve();
-                    }, 'image/jpeg', 0.85);
+                // createImageBitmap 옵션을 이용해 GPU 선에서 자르기 및 축소를 고속 완료 (메인 CPU 점유 차단)
+                const bitmap = await createImageBitmap(videoPreview, cX, cY, cW, cH, {
+                    resizeWidth: finalW,
+                    resizeHeight: finalH,
+                    resizeQuality: 'high'
                 });
+
+                // 객체의 참조 소유권을 즉시 고속으로 넘겨 메모리 더블 축적 방지
+                gifWorker.postMessage({
+                    type: 'frame',
+                    data: { bitmap, format: formatParam }
+                }, [bitmap]);
 
                 const progressPercent = Math.round((i / totalFrames) * 50);
                 progressBar.style.width = progressPercent + '%';
                 progressText.innerText = progressPercent + '%';
-                
                 progressStatus.innerHTML = `<span class="material-icons text-sm mr-1">movie</span><span>${currentLang === 'ko' ? `고속 프레임 크롭 중... (${i + 1}/${totalFrames})` : `Extracting frames... (${i + 1}/${totalFrames})`}</span>`;
 
                 currentSeekTime += interval;
             }
 
-            // 2단계: gifshot 데이터 렌더링 단계 (동적 numWorkers 설정 반영)
-            progressStatus.innerHTML = `<span class="material-icons text-sm mr-1 animate-spin">hourglass_empty</span><span>${currentLang === 'ko' ? "고프레임 GIF 데이터 빌드 및 인코딩 압축 중..." : "Building GIF data and compressing..."}</span>`;
-            
-            gifshot.createGIF({
-                images: frameImages,
-                interval: interval,
-                gifWidth: finalW,
-                gifHeight: finalH,
-                sampleInterval: sampleInterval,
-                numWorkers: workerCount, // 유저 세팅 대입하여 CPU 코어 사용 한도 제어
-                progressCallback: function(progress) {
-                    const progressPercent = 50 + Math.round(progress * 50);
-                    progressBar.style.width = progressPercent + '%';
-                    progressText.innerText = progressPercent + '%';
-                }
-            }, function(obj) {
-                frameImages.forEach(url => URL.revokeObjectURL(url));
-
-                convertBtn.disabled = false;
-                convertBtn.classList.remove('opacity-50');
-
-                if (!obj.error) {
-                    gifResult.src = obj.image;
-                    downloadBtn.href = obj.image;
-                    downloadBtn.download = `cropped_output_${fps}fps.gif`;
-                    
-                    progressStatus.innerHTML = `<span class="material-icons text-sm mr-1 text-emerald-500">celebration</span><span>${currentLang === 'ko' ? "GIF 변환 완벽 성공!" : "GIF Conversion Successful!"}</span>`;
-                    resultContainer.classList.remove('hidden');
-                } else {
-                    alert((currentLang === 'ko' ? '인코딩 도중 에러가 발생했습니다: ' : 'An error occurred during encoding: ') + obj.errorMsg);
-                    progressStatus.innerHTML = `<span class="material-icons text-sm mr-1 text-red-500">error</span><span>${currentLang === 'ko' ? "변환 실패" : "Conversion Failed"}</span>`;
-                }
-            });
+            // 모든 프레임 전달 완료 후 종결 마감 명령 전송
+            gifWorker.postMessage({ type: 'finish' });
         });
     </script>
 </body>

@@ -223,7 +223,6 @@
     </div>
 
     <script id="workerScript" type="text/javascript-worker">
-        // 모듈 워커 내에서 jsDelivr ESM 파이프라인을 활용해 모듈 로드
         import * as GIFEnc from 'https://cdn.jsdelivr.net/npm/gifenc/+esm';
 
         let gifEncoder = null;
@@ -256,9 +255,12 @@
                 bitmap.close();
 
                 const imgData = offscreenCtx.getImageData(0, 0, width, height);
-                const rgba = imgData.data;
                 
-                const format = 'rgb565';
+                // 형변환 안정성 확보 및 정밀 RGBA 배열 추출
+                const rgba = new Uint8Array(imgData.data.buffer);
+                
+                // 색상 깨짐 현상 해결: 'rgb565' 대신 완전한 RGBA 표준 채널인 'rgba8888' 매핑 적용
+                const format = 'rgba8888';
                 const palette = GIFEnc.quantize(rgba, 256, { format });
                 const indexMap = GIFEnc.applyPalette(rgba, palette, format);
 
@@ -537,8 +539,6 @@
             videoPreview.pause();
 
             const workerBlob = new Blob([document.getElementById('workerScript').textContent], { type: 'application/javascript' });
-            
-            // 모듈 워커 지정을 위해 { type: 'module' } 속성 부여
             const encodingWorker = new Worker(URL.createObjectURL(workerBlob), { type: 'module' });
 
             encodingWorker.postMessage({

@@ -489,28 +489,18 @@
             convertBtn.disabled = true;
             convertBtn.classList.add('opacity-50');
 
-            const captureCanvas = document.createElement('canvas');
-            captureCanvas.width = finalW;
-            captureCanvas.height = finalH;
-            const ctx = captureCanvas.getContext('2d');
-
-            const frameImages = [];
-            let currentSeekTime = start;
-
             videoPreview.pause();
 
             if (window.activeGifWorker) {
                 window.activeGifWorker.terminate();
             }
 
-            // [글로벌 팔레트 고정 아키텍처가 이식된 차세대 워커 스크립트]
+            // [2-Pass 정밀 샘플링 기반 글로벌 팔레트 완전 자동화 워커 코드]
             const workerCode = `
                 import { GIFEncoder, quantize, applyPalette } from 'https://cdn.jsdelivr.net/npm/gifenc/+esm';
 
-                let gif = null;
-                let width, height, delay;
-                let framesProcessed = 0;
-                let globalPalette = null; // 인스턴스 전역에 단 하나의 팔레트 공간 확보
+                let width, height, delay, format;
+                let bufferedFrames = [];
 
                 self.onmessage = async function(e) {
                     const { type, data } = e.data;
@@ -519,11 +509,10 @@
                         width = data.width;
                         height = data.height;
                         delay = data.delay;
-                        gif = new GIFEncoder();
-                        framesProcessed = 0;
-                        globalPalette = null; // 초기화
+                        format = data.format;
+                        bufferedFrames = [];
                     } else if (type === 'frame') {
-                        const { bitmap, format } = data;
+                        const { bitmap } = data;
                         
                         const canvas = new OffscreenCanvas(width, height);
                         const ctx = canvas.getContext('2d');
@@ -531,28 +520,52 @@
                         bitmap.close(); 
                         
                         const imgData = ctx.getImageData(0, 0, width, height);
-                        const pixels = imgData.data;
+                        // 순수 픽셀 데이터만 배열에 버퍼링 (안정성 최적화)
+                        bufferedFrames.push(imgData.data);
                         
-                        // [핵심 최적화]: 첫 프레임에서 단 한 번만 팔레트를 계산하여 픽셀 색상을 고정시킵니다.
-                        if (!globalPalette) {
-                            globalPalette = quantize(pixels, 256, { format: format });
+                        self.postMessage({ type: 'extract_progress', data: bufferedFrames.length });
+                    } else if (type === 'finish') {
+                        if (bufferedFrames.length === 0) return;
+                        
+                        const gif = new GIFEncoder();
+                        
+                        // [Pass 1]: 영상 전 구간을 커버하기 위해 추출된 프레임 중 최대 20개를 균등 샘플링하여 병합합니다.
+                        const sampleCount = Math.min(bufferedFrames.length, 20);
+                        const sampleStep = Math.max(1, Math.floor(bufferedFrames.length / sampleCount));
+                        
+                        let totalSampleSize = 0;
+                        for (let i = 0; i < bufferedFrames.length; i += sampleStep) {
+                            totalSampleSize += bufferedFrames[i].length;
                         }
                         
-                        // 모든 프레임에 동일한 글로벌 팔레트를 대입하여 색상 왜곡/깜빡임을 원천 제거합니다.
-                        const index = applyPalette(pixels, globalPalette, format);
+                        const combinedSamples = new Uint8ClampedArray(totalSampleSize);
+                        let offset = 0;
+                        for (let i = 0; i < bufferedFrames.length; i += sampleStep) {
+                            combinedSamples.set(bufferedFrames[i], offset);
+                            offset += bufferedFrames[i].length;
+                        }
                         
-                        gif.writeFrame(index, width, height, {
-                            palette: globalPalette,
-                            delay: delay,
-                            repeat: framesProcessed === 0 ? 0 : undefined
-                        });
+                        // 영상 전체의 색상 스펙트럼을 대변하는 완벽한 256색 글로벌 팔레트 계산
+                        const globalPalette = quantize(combinedSamples, 256, { format: format });
                         
-                        framesProcessed++;
-                        self.postMessage({ type: 'progress', data: framesProcessed });
-                    } else if (type === 'finish') {
+                        // [Pass 2]: 완벽해진 단 하나의 고정 팔레트를 모든 프레임에 동일하게 매핑하여 빌드
+                        for (let i = 0; i < bufferedFrames.length; i++) {
+                            const pixels = bufferedFrames[i];
+                            const index = applyPalette(pixels, globalPalette, format);
+                            
+                            gif.writeFrame(index, width, height, {
+                                palette: globalPalette,
+                                delay: delay,
+                                repeat: 0
+                            });
+                            
+                            self.postMessage({ type: 'encode_progress', data: { current: i + 1, total: bufferedFrames.length } });
+                        }
+                        
                         gif.finish();
                         const buffer = gif.bytes();
                         self.postMessage({ type: 'success', data: buffer }, [buffer.buffer]);
+                        bufferedFrames = []; // 메모리 완전 즉시 클리어
                     }
                 };
             `;
@@ -566,18 +579,30 @@
 
             gifWorker.postMessage({
                 type: 'init',
-                data: { width: finalW, height: finalH, delay: Math.round(interval * 1000) }
+                data: { width: finalW, height: finalH, delay: Math.round(interval * 1000), format: formatParam }
             });
 
+            // 멀티스레드 통신 제어 리스너
             gifWorker.onmessage = function(e) {
                 const { type, data } = e.data;
-                if (type === 'progress') {
-                    const encodedCount = data;
-                    const progressPercent = 50 + Math.round((encodedCount / totalFrames) * 50);
+                
+                if (type === 'extract_progress') {
+                    // 프레임 추출 진행률 (전체 게이지의 0% ~ 50% 담당)
+                    const frameCount = data;
+                    const progressPercent = Math.round((frameCount / totalFrames) * 50);
                     progressBar.style.width = progressPercent + '%';
                     progressText.innerText = progressPercent + '%';
-                    progressStatus.innerHTML = `<span class="material-icons text-sm mr-1 animate-spin">hourglass_empty</span><span>${currentLang === 'ko' ? `고프레임 GIF 데이터 빌드 및 인코딩 압축 중... (${encodedCount}/${totalFrames})` : `Building GIF data and compressing... (${encodedCount}/${totalFrames})`}</span>`;
-                } else if (type === 'success') {
+                    progressStatus.innerHTML = `<span class="material-icons text-sm mr-1">movie</span><span>${currentLang === 'ko' ? `고속 프레임 크롭 중... (${frameCount}/${totalFrames})` : `Extracting frames... (${frameCount}/${totalFrames})`}</span>`;
+                } 
+                else if (type === 'encode_progress') {
+                    // 글로벌 팔레트 기반 이미지 굽기 진행률 (전체 게이지의 50% ~ 100% 담당)
+                    const { current, total } = data;
+                    const progressPercent = 50 + Math.round((current / total) * 50);
+                    progressBar.style.width = progressPercent + '%';
+                    progressText.innerText = progressPercent + '%';
+                    progressStatus.innerHTML = `<span class="material-icons text-sm mr-1 animate-spin">hourglass_empty</span><span>${currentLang === 'ko' ? `고화질 글로벌 팔레트 압축 빌드 중... (${current}/${total})` : `Encoding with global palette... (${current}/${total})`}</span>`;
+                } 
+                else if (type === 'success') {
                     const buffer = data;
                     const resultBlob = new Blob([buffer], { type: 'image/gif' });
                     const gifUrl = URL.createObjectURL(resultBlob);
@@ -605,6 +630,7 @@
 
             let currentSeekTime = start;
 
+            // GPU 기반 고속 비디오 프레임 추출 루프
             for (let i = 0; i < totalFrames; i++) {
                 if (currentSeekTime > videoDuration) break;
 
@@ -621,18 +647,13 @@
 
                 gifWorker.postMessage({
                     type: 'frame',
-                    data: { bitmap, format: formatParam }
+                    data: { bitmap }
                 }, [bitmap]);
-
-                const progressPercent = Math.round((i / totalFrames) * 50);
-                progressBar.style.width = progressPercent + '%';
-                progressText.innerText = progressPercent + '%';
-                
-                progressStatus.innerHTML = `<span class="material-icons text-sm mr-1">movie</span><span>${currentLang === 'ko' ? `고속 프레임 크롭 중... (${i + 1}/${totalFrames})` : `Extracting frames... (${i + 1}/${totalFrames})`}</span>`;
 
                 currentSeekTime += interval;
             }
 
+            // 모든 비디오 스캔이 끝나면 워커에게 최종 인코딩 단계(Pass 2) 진입 명령을 내립니다.
             gifWorker.postMessage({ type: 'finish' });
         });
     </script>

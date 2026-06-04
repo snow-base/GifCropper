@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>GIF 크롭퍼 - 간편한 움짤 변환기</title>
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>✂️</text></svg>">
+    <link class="hidden" rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>✂️</text></svg>">
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/gifshot@0.4.5/dist/gifshot.min.js"></script>
@@ -495,15 +495,12 @@
             const ctx = captureCanvas.getContext('2d');
 
             const frameImages = [];
-            let currentSeekTime = start;
-
             videoPreview.pause();
 
             if (window.activeGifWorker) {
                 window.activeGifWorker.terminate();
             }
 
-            // [최고 화질 대응: rgba8888 트루컬러 및 최대 60장 2-Pass 정밀 샘플링 이식 워커]
             const workerCode = `
                 import { GIFEncoder, quantize, applyPalette } from 'https://cdn.jsdelivr.net/npm/gifenc/+esm';
 
@@ -535,8 +532,6 @@
                         if (bufferedFrames.length === 0) return;
                         
                         const gif = new GIFEncoder();
-                        
-                        // [Pass 1]: 색 왜곡 차단을 위해 전체 구간 샘플링 풀을 최대 60장으로 대폭 확대
                         const sampleCount = Math.min(bufferedFrames.length, 60);
                         const sampleStep = Math.max(1, Math.floor(bufferedFrames.length / sampleCount));
                         
@@ -552,10 +547,8 @@
                             offset += bufferedFrames[i].length;
                         }
                         
-                        // 지정된 정밀 32비트 포맷(rgba8888) 데이터 기반 완벽한 대표 256색 추출
                         const globalPalette = quantize(combinedSamples, 256, { format: format });
                         
-                        // [Pass 2]: 왜곡 현상이 박멸된 트루컬러 팔레트 프레임 맵핑 매칭
                         for (let i = 0; i < bufferedFrames.length; i++) {
                             const pixels = bufferedFrames[i];
                             const index = applyPalette(pixels, globalPalette, format);
@@ -582,7 +575,6 @@
             const gifWorker = new Worker(workerUrl, { type: 'module' });
             window.activeGifWorker = gifWorker;
 
-            // [색상 복원 핵심]: 상위 화질 옵션일 때는 압축하지 않는 트루컬러 'rgba8888' 강제 맵핑
             const formatParam = (sampleInterval <= 6) ? 'rgba8888' : 'rgb565';
 
             gifWorker.postMessage({
@@ -598,7 +590,7 @@
                     const progressPercent = Math.round((frameCount / totalFrames) * 50);
                     progressBar.style.width = progressPercent + '%';
                     progressText.innerText = progressPercent + '%';
-                    減progressStatus.innerHTML = `<span class="material-icons text-sm mr-1">movie</span><span>${currentLang === 'ko' ? `고속 프레임 크롭 중... (${frameCount}/${totalFrames})` : `Extracting frames... (${frameCount}/${totalFrames})`}</span>`;
+                    progressStatus.innerHTML = `<span class="material-icons text-sm mr-1">movie</span><span>${currentLang === 'ko' ? `고속 프레임 크롭 중... (${frameCount}/${totalFrames})` : `Extracting frames... (${frameCount}/${totalFrames})`}</span>`;
                 } 
                 else if (type === 'encode_progress') {
                     const { current, total } = data;

@@ -244,12 +244,17 @@
                 const { buffer, index, total } = msg;
                 const rgba = new Uint8Array(buffer);
                 
-                const format = 'rgb565';
-                const palette = GIFEnc.quantize(rgba, 256, { format });
-                const indexMap = GIFEnc.applyPalette(rgba, palette, format);
+                // [왜곡 해결 1] 문제의 rgb565 방식을 제거하고 고화질 기본 8비트 풀컬러(rgba8888) 분석 엔진을 사용합니다.
+                const palette = GIFEnc.quantize(rgba, 256);
+                const indexMap = GIFEnc.applyPalette(rgba, palette);
+
+                // [왜곡 해결 2] 팔레트 유실 및 비트 밀림 현상으로 특정 부분이 보라색 블록으로 뒤틀리는 버그를 막기 위해,
+                // 팔레트 배열 규격을 GIF 명세 표준 크기인 256색(768바이트)으로 완전하게 맞추어 출력합니다.
+                const finalPalette = new Uint8Array(256 * 3);
+                finalPalette.set(palette);
 
                 gifEncoder.writeFrame(indexMap, width, height, {
-                    palette: palette,
+                    palette: finalPalette,
                     delay: delayMs
                 });
 
@@ -521,6 +526,7 @@
 
             videoPreview.pause();
 
+            // 백그라운드 무대 도화지 생성
             const renderCanvas = document.createElement('canvas');
             renderCanvas.width = finalW;
             renderCanvas.height = finalH;
@@ -543,7 +549,7 @@
                     const percent = Math.min(100, Math.round(((response.index + 1) / totalFrames) * 100));
                     progressBar.style.width = percent + '%';
                     progressText.innerText = percent + '%';
-                    progressStatus.innerHTML = `<span class="material-icons text-sm mr-1">movie</span><span>${currentLang === 'ko' ? `고화질 프레임 동기화 렌더링 중... (${response.index + 1}/${totalFrames})` : `Encoding frames... (${response.index + 1}/${totalFrames})`}</span>`;
+                    progressStatus.innerHTML = `<span class="material-icons text-sm mr-1">movie</span><span>${currentLang === 'ko' ? `초고화질 이미지 프레임 변환 중... (${response.index + 1}/${totalFrames})` : `Encoding frames... (${response.index + 1}/${totalFrames})`}</span>`;
                 }
 
                 if (response.type === 'SUCCESS') {
@@ -559,61 +565,40 @@
                     
                     convertBtn.disabled = false;
                     convertBtn.classList.remove('opacity-50');
-                    videoPreview.playbackRate = 1.0; // 속도 원상복구
                     encodingWorker.terminate();
                 }
             };
 
-            // 보라색/초록색 마크로블록 깨짐 완전 차단 핵심 솔루션: '순차 재생 프레임 가로채기 엔진' 기동
-            videoPreview.muted = true; 
-            videoPreview.currentTime = start;
-            
-            videoPreview.onseeked = function() {
-                videoPreview.onseeked = null; 
+            let currentSeekTime = start;
+
+            // 빠르고 정확한 타임 점프 프레임 캡처 파이프라인 가동
+            for (let i = 0; i < totalFrames; i++) {
+                if (currentSeekTime > videoDuration) break;
+
+                await new Promise((resolve) => {
+                    videoPreview.currentTime = currentSeekTime;
+                    videoPreview.onseeked = resolve;
+                });
+
+                // 디코더 화면 안정화를 위한 극소 대기 시간 부여
+                await new Promise(r => setTimeout(r, 40));
+
+                renderCtx.drawImage(videoPreview, cX, cY, cW, cH, 0, 0, finalW, finalH);
                 
-                // 재생 속도를 의도적으로 낮춰 브라우저 GPU 디코더가 깨진 화면 없이 완전한 픽셀만 그리도록 보장
-                videoPreview.playbackRate = 0.3; 
-                videoPreview.play();
+                const imgData = renderCtx.getImageData(0, 0, finalW, finalH);
+                const buffer = imgData.data.buffer;
 
-                let targetTime = start;
-                let frameIndex = 0;
+                encodingWorker.postMessage({
+                    type: 'FRAME',
+                    buffer: buffer,
+                    index: i,
+                    total: totalFrames
+                }, [buffer]);
 
-                function captureLoop(now, metadata) {
-                    if (videoPreview.paused || videoPreview.ended) return;
+                currentSeekTime += interval;
+            }
 
-                    const currTime = videoPreview.currentTime;
-
-                    // 범위 종료 시 인코딩 마감
-                    if (currTime >= end || frameIndex >= totalFrames) {
-                        videoPreview.pause();
-                        encodingWorker.postMessage({ type: 'FINISH' });
-                        return;
-                    }
-
-                    // 비디오 타임라인이 계산된 다음 프레임 타겟 지점에 도달했을 때만 캡처 진행
-                    if (currTime >= targetTime) {
-                        renderCtx.drawImage(videoPreview, cX, cY, cW, cH, 0, 0, finalW, finalH);
-                        
-                        const imgData = renderCtx.getImageData(0, 0, finalW, finalH);
-                        const buffer = imgData.data.buffer;
-
-                        encodingWorker.postMessage({
-                            type: 'FRAME',
-                            buffer: buffer,
-                            index: frameIndex,
-                            total: totalFrames
-                        }, [buffer]);
-
-                        frameIndex++;
-                        targetTime = start + (frameIndex * interval);
-                    }
-
-                    // 프레임 유실 없는 추적 루프 지속
-                    videoPreview.requestVideoFrameCallback(captureLoop);
-                }
-
-                videoPreview.requestVideoFrameCallback(captureLoop);
-            };
+            encodingWorker.postMessage({ type: 'FINISH' });
         });
     </script>
 </body>

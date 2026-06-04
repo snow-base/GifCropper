@@ -151,10 +151,10 @@
                             <label class="block text-gray-700 dark:text-[#858585] font-semibold mb-1 i18n" data-ko="인코딩 화질 압축" data-en="Encoding Quality">인코딩 화질 압축</label>
                             <select id="qualityInput" class="w-full p-2 border dark:border-[#3c3c3c] dark:bg-[#3c3c3c] dark:text-[#fff] rounded bg-white focus:outline-none">
                                 <option value="1" class="i18n" data-ko="최고 화질 (매우 느림)" data-en="Ultra Quality (Slow)">최고 화질 (매우 느림)</option>
-                                <option value="3" class="i18n" data-ko="고화질 밸런스" data-en="High Quality">고화질 밸런스</option>
-                                <option value="6" selected class="i18n" data-ko="일반 화질 (추천/속도 업)" data-en="Medium Quality (Recommended)">일반 화질 (추천/속도 업)</option>
-                                <option value="10" class="i18n" data-ko="낮은 화질 (초고속 인코딩)" data-en="Low Quality (Fast)">낮은 화질 (초고속 인코딩)</option>
-                                <option value="15" class="i18n" data-ko="최대 압축 (최저 화질)" data-en="Max Compression">최대 압축 (최저 화질)</option>
+                                <option value="3" class="i18n" data-ko="고화질 (색상 정확)" data-en="High Quality">고화질 (색상 정확)</option>
+                                <option value="4" selected class="i18n" data-ko="표준 밸런스 (추천)" data-en="Balanced (Recommended)">표준 밸런스 (추천)</option>
+                                <option value="8" class="i18n" data-ko="일반 화질 (속도 우선)" data-en="Medium Quality">일반 화질 (속도 우선)</option>
+                                <option value="12" class="i18n" data-ko="낮은 화질 (초고속)" data-en="Low Quality">낮은 화질 (초고속)</option>
                             </select>
                         </div>
                     </div>
@@ -474,7 +474,7 @@
             const start = parseFloat(startTime.value) || 0;
             const end = parseFloat(endTime.value) || videoDuration;
             const fps = parseInt(fpsInput.value) || 10;
-            const sampleInterval = parseInt(qualityInput.value) || 6;
+            const sampleInterval = parseInt(qualityInput.value) || 4;
             const workerCount = parseInt(cpuWorkerInput.value) || 2; 
 
             const duration = end - start;
@@ -501,7 +501,7 @@
 
             videoPreview.pause();
 
-            // 1단계: 프레임 크롭 추출 단계 (toDataURL을 사용하여 동기식으로 초고속 렌더링)
+            // 1단계: 프레임 크롭 추출 단계
             for (let i = 0; i < totalFrames; i++) {
                 if (currentSeekTime > videoDuration) break;
 
@@ -510,10 +510,12 @@
                     videoPreview.onseeked = resolve;
                 });
 
+                // 해결책: 잔상 방지를 위해 매번 캔버스 영역 깨끗하게 비우기
+                ctx.clearRect(0, 0, finalW, finalH);
                 ctx.drawImage(videoPreview, cX, cY, cW, cH, 0, 0, finalW, finalH);
                 
-                // 최적화: 무거운 비동기 Blob생성 대신 동기식 DataURL로 변경하여 지연시간 단축
-                frameImages.push(captureCanvas.toDataURL('image/jpeg', 0.8));
+                // 해결책: 손실 없는 고정밀 PNG 데이터 스트림으로 색상 깜빡임 전면 차단
+                frameImages.push(captureCanvas.toDataURL('image/png'));
 
                 const progressPercent = Math.round((i / totalFrames) * 50);
                 progressBar.style.width = progressPercent + '%';
@@ -540,7 +542,7 @@
                     progressText.innerText = progressPercent + '%';
                 }
             }, function(obj) {
-                // 가비지 컬렉션을 위해 프레임 배열 비우기 (메모리 해제)
+                // 가비지 컬렉션을 즉시 유도하여 브라우저 가볍게 유지 (메모리 완전 비우기)
                 frameImages = [];
 
                 convertBtn.disabled = false;

@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>GIF 크롭퍼 - 간편한 움짤 변환기</title>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%231A73E8'><path d='M17 15h2V7c0-1.1-.9-2-2-2H9v2h8v8zM5 17c0 1.1.9 2 2 2h8v2h2v-2h2v-2H7V5H5v2H3v2h2v8z'/></svg>">
+<link class="flex" rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%231A73E8'><path d='M17 15h2V7c0-1.1-.9-2-2-2H9v2h8v8zM5 17c0 1.1.9 2 2 2h8v2h2v-2h2v-2H7V5H5v2H3v2h2v8z'/></svg>">
     
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
@@ -223,8 +223,8 @@
     </div>
 
     <script id="workerScript" type="text/javascript-worker">
-        // gifenc 모듈 CDN 로드 경로 수정 (umd 빌드 적용)
-        importScripts('https://cdn.jsdelivr.net/npm/gifenc/dist/gifenc.umd.js');
+        // 모듈 워커 내에서 jsDelivr ESM 파이프라인을 활용해 모듈 로드
+        import * as GIFEnc from 'https://cdn.jsdelivr.net/npm/gifenc/+esm';
 
         let gifEncoder = null;
         let offscreenCanvas = null;
@@ -537,7 +537,9 @@
             videoPreview.pause();
 
             const workerBlob = new Blob([document.getElementById('workerScript').textContent], { type: 'application/javascript' });
-            const encodingWorker = new Worker(URL.createObjectURL(workerBlob));
+            
+            // 모듈 워커 지정을 위해 { type: 'module' } 속성 부여
+            const encodingWorker = new Worker(URL.createObjectURL(workerBlob), { type: 'module' });
 
             encodingWorker.postMessage({
                 type: 'INIT',

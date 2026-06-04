@@ -244,7 +244,6 @@
                 const { buffer, index, total } = msg;
                 const rgba = new Uint8Array(buffer);
                 
-                // gifenc 모듈 표준 규격 전용 rgb565 양자화 처리
                 const format = 'rgb565';
                 const palette = GIFEnc.quantize(rgba, 256, { format });
                 const indexMap = GIFEnc.applyPalette(rgba, palette, format);
@@ -522,7 +521,6 @@
 
             videoPreview.pause();
 
-            // 렌더링 검증용 도화지 메인스레드에 은닉 생성 (alpha: false 옵션으로 보라색/초록색 잔상 차단)
             const renderCanvas = document.createElement('canvas');
             renderCanvas.width = finalW;
             renderCanvas.height = finalH;
@@ -570,22 +568,32 @@
             for (let i = 0; i < totalFrames; i++) {
                 if (currentSeekTime > videoDuration) break;
 
+                // [색상 보라색 깨짐 해결 핵심] 
+                // 하드웨어 가속 비디오 디코더가 완벽하게 화면 텍스처를 밀어줄 때까지 requestVideoFrameCallback 표준 API를 통해 정밀 대기합니다.
                 await new Promise((resolve) => {
+                    let resolved = false;
+                    const safeResolve = () => {
+                        if (!resolved) {
+                            resolved = true;
+                            resolve();
+                        }
+                    };
+
+                    if ('requestVideoFrameCallback' in videoPreview) {
+                        videoPreview.requestVideoFrameCallback(safeResolve);
+                    }
+                    videoPreview.onseeked = safeResolve;
                     videoPreview.currentTime = currentSeekTime;
-                    videoPreview.onseeked = resolve;
                 });
 
-                // 브라우저 내부 하드웨어 가속 디코더가 안정적으로 픽셀을 채울 수 있도록 정밀 동기화 딜레이 적용
-                await new Promise(r => setTimeout(r, 25));
+                // 디코더 하드웨어가 완전히 픽셀 안정화를 이룰 수 있도록 안정화 타임아웃(80ms) 부여
+                await new Promise(r => setTimeout(r, 80));
 
-                // 가장 안전한 네이티브 경로로 비디오 프레임을 2D 컨텍스트에 렌더링 (보라색 글리치 원천 차단)
                 renderCtx.drawImage(videoPreview, cX, cY, cW, cH, 0, 0, finalW, finalH);
                 
-                // 순수 픽셀 데이터 배열 추출
                 const imgData = renderCtx.getImageData(0, 0, finalW, finalH);
                 const buffer = imgData.data.buffer;
 
-                // 워커로 버퍼 소유권 완전 이전 (Zero-Copy)
                 encodingWorker.postMessage({
                     type: 'FRAME',
                     buffer: buffer,

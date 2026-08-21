@@ -136,7 +136,7 @@ function lzw(indices,minCodeSize=8){
     const k=indices[i], key=(prefix<<8)|k, val=dict.get(key);
     if(val!==undefined){prefix=val;continue}
     bw.write(prefix,codeSize);
-    if(next<4096){dict.set(key,next++);if(next===(1<<codeSize)&&codeSize<12)codeSize++}else{bw.write(clear,codeSize);dict.clear();codeSize=minCodeSize+1;next=end+1}
+    if(next<4096){if(next===(1<<codeSize)&&codeSize<12)codeSize++;dict.set(key,next++)}else{bw.write(clear,codeSize);dict.clear();codeSize=minCodeSize+1;next=end+1}
     prefix=k;
   }
   bw.write(prefix,codeSize);bw.write(end,codeSize);

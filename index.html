@@ -1,312 +1,540 @@
 <!doctype html>
 <html lang="ko">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>FrameForge 3 — Video to GIF</title>
-<style>
-:root{--bg:#090b10;--panel:#11151d;--panel2:#0d1118;--line:#252c38;--txt:#f2f5fb;--muted:#8f98a8;--a:#8b7cff;--a2:#5eead4}
-*{box-sizing:border-box}body{margin:0;background:radial-gradient(900px 550px at 0 -10%,#6f5eff24,transparent 60%),radial-gradient(700px 450px at 100% 0,#53e5d719,transparent 60%),var(--bg);color:var(--txt);font:13px Inter,system-ui,sans-serif;padding:22px}
-.app{max-width:1280px;margin:auto}.top{display:flex;justify-content:space-between;align-items:end;margin-bottom:16px}.brand{font-size:26px;font-weight:850;letter-spacing:-.04em}.brand b{color:var(--a)}.sub{color:var(--muted);font-size:12px;margin-top:4px}.status{font-size:11px;color:#adb5c2}.dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:#3fe0aa;box-shadow:0 0 12px #3fe0aa;margin-right:6px}
-.grid{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(330px,.78fr);gap:16px}.card{border:1px solid var(--line);border-radius:18px;background:linear-gradient(#ffffff05,#ffffff00),var(--panel);box-shadow:0 24px 70px #0006}
-.preview{padding:13px}.stage{position:relative;aspect-ratio:16/9;border-radius:14px;background:#07090e;overflow:hidden;border:1px solid #1d2430;display:grid;place-items:center}.stage video{width:100%;height:100%;object-fit:contain}
-.empty{position:absolute;inset:0;display:grid;place-items:center}.drop{width:min(450px,88%);padding:28px;border:1px dashed #3b4351;border-radius:15px;text-align:center;cursor:pointer;background:#ffffff02}.drop:hover{border-color:#6258d2;background:#8b7cff0b}.drop .ico{font-size:36px}.drop h2{font-size:16px;margin:9px 0 5px}.drop p{font-size:11px;color:var(--muted);margin:0}
-.cropbox{position:absolute;display:none;border:2px solid #fff;box-shadow:0 0 0 9999px #0007;cursor:move}.cropbox .handle{position:absolute;width:12px;height:12px;background:#fff;border:2px solid #7168ea;border-radius:4px}.nw{left:-7px;top:-7px;cursor:nwse-resize}.ne{right:-7px;top:-7px;cursor:nesw-resize}.sw{left:-7px;bottom:-7px;cursor:nesw-resize}.se{right:-7px;bottom:-7px;cursor:nwse-resize}
-.tools{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding-top:11px}.tools button,.right button{border:1px solid #2a3341;background:#191f2a;color:var(--txt);border-radius:9px;padding:9px 11px;cursor:pointer}.tools button:hover,.right button:hover{border-color:#404b5e;background:#222a37}.primary{background:linear-gradient(135deg,#8b7cff,#6658da)!important;border-color:transparent!important;font-weight:800}.tools .file{margin-left:auto;color:#7e8797;font-size:10px}
-.timeline{padding-top:10px}.range{position:relative;height:31px}.track,.selected{position:absolute;left:0;right:0;top:14px;height:5px;border-radius:99px}.track{background:#272e3a}.selected{background:linear-gradient(90deg,var(--a),var(--a2))}.range input{position:absolute;left:0;top:0;width:100%;height:31px;margin:0;appearance:none;background:transparent;pointer-events:none}.range input::-webkit-slider-thumb{appearance:none;width:16px;height:16px;border-radius:50%;background:#fff;border:3px solid #8176ef;pointer-events:auto}.range input::-moz-range-thumb{width:11px;height:11px;border-radius:50%;background:#fff;border:3px solid #8176ef;pointer-events:auto}.times{display:flex;justify-content:space-between;font-size:10px;color:#a1aaba}
-.right{padding:16px}.section{padding-bottom:15px;margin-bottom:15px;border-bottom:1px solid var(--line)}.section:last-child{border:0;margin:0;padding:0}.section h3{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:#a8b1c0;margin:0 0 11px}.row{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-bottom:9px}.field label{display:flex;justify-content:space-between;color:#aeb6c2;font-size:10px;margin-bottom:5px}.field input[type=number],.field select{width:100%;height:36px;background:#0c1016;border:1px solid #293240;border-radius:8px;color:#eef1f6;padding:0 9px}.field input[type=range]{width:100%;accent-color:#8b7cff}
-.preset{display:grid;grid-template-columns:repeat(3,1fr);gap:7px}.preset button{font-size:10px;padding:8px}.toggle{display:flex;justify-content:space-between;align-items:center;padding:9px 0}.toggle strong{display:block;font-size:11px}.toggle small{display:block;color:#747f90;font-size:9px;margin-top:3px}.switch{width:42px;height:23px;position:relative}.switch input{display:none}.slider{position:absolute;inset:0;background:#242b37;border:1px solid #333c4b;border-radius:99px}.slider:before{content:"";position:absolute;width:17px;height:17px;left:2px;top:2px;border-radius:50%;background:#a6afbd;transition:.18s}.switch input:checked+.slider{background:#5147bb;border-color:#6a60df}.switch input:checked+.slider:before{transform:translateX(19px);background:#fff}
-.info{display:grid;grid-template-columns:repeat(3,1fr);gap:7px}.stat{background:#0c1016;border:1px solid #202732;border-radius:9px;padding:9px}.stat i{font-style:normal;color:#7f8998;font-size:9px}.stat b{display:block;font-size:12px;margin-top:5px}.bar{height:8px;background:#202732;border-radius:99px;overflow:hidden;margin-top:10px;display:none}.bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--a),var(--a2))}.log{margin-top:8px;background:#080b10;border:1px solid #1a2029;border-radius:9px;padding:9px;color:#8d96a6;font:10px/1.5 ui-monospace,monospace;max-height:106px;overflow:auto;white-space:pre-wrap}
-.out{margin-top:14px;padding:13px;border-radius:14px;border:1px solid #2a3240;background:#0d1118;display:none}.out .headline{display:flex;justify-content:space-between}.badge{font-size:9px;padding:4px 7px;border-radius:99px;background:#13221e;color:#67e5c7;border:1px solid #274c40}.download{display:block;width:100%;margin-top:9px;text-align:center;text-decoration:none}.download button{width:100%;font-weight:800}.fine{font-size:9px;color:#737d8d;line-height:1.5;margin-top:8px}
-.hidden{display:none!important}@media(max-width:900px){.grid{grid-template-columns:1fr}}@media(max-width:600px){body{padding:10px}.row{grid-template-columns:1fr}.tools .file{margin-left:0}.top{align-items:start;gap:8px;flex-direction:column}}
-</style>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Video → GIF Studio</title>
+  <meta name="description" content="브라우저에서 FFmpeg 팔레트 기반으로 고품질 GIF를 만드는 동영상 변환기" />
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0c0e13;
+      --panel: #141820;
+      --panel2: #191e28;
+      --line: #2b3342;
+      --text: #f3f6fb;
+      --muted: #98a3b5;
+      --accent: #7c8cff;
+      --accent2: #9e7cff;
+      --good: #4fd6a2;
+      --warn: #ffbf69;
+      --danger: #ff6b7a;
+      --radius: 18px;
+      --shadow: 0 24px 70px rgba(0,0,0,.34);
+    }
+    * { box-sizing: border-box; }
+    html, body { min-height: 100%; }
+    body {
+      margin: 0;
+      font-family: Inter, Pretendard, "Noto Sans KR", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background:
+        radial-gradient(900px 500px at 10% -10%, rgba(124,140,255,.18), transparent 65%),
+        radial-gradient(800px 500px at 100% 0%, rgba(158,124,255,.12), transparent 60%),
+        var(--bg);
+      color: var(--text);
+    }
+    button, input, select { font: inherit; }
+    button { cursor: pointer; }
+    .app { width: min(1240px, calc(100% - 28px)); margin: 0 auto; padding: 28px 0 60px; }
+    header { display: flex; gap: 20px; align-items: end; justify-content: space-between; margin-bottom: 22px; }
+    .brand h1 { margin: 0; font-size: clamp(28px, 4vw, 44px); letter-spacing: -.04em; }
+    .brand p { margin: 8px 0 0; color: var(--muted); font-size: 14px; }
+    .badge { padding: 8px 11px; border: 1px solid var(--line); border-radius: 999px; color: #c9d2e2; background: rgba(20,24,32,.75); font-size: 12px; white-space: nowrap; }
+    .grid { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(340px, .75fr); gap: 18px; }
+    .card { background: linear-gradient(180deg, rgba(25,30,40,.97), rgba(18,22,30,.97)); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; }
+    .card-head { padding: 18px 20px; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; align-items: center; gap: 16px; }
+    .card-head h2 { margin: 0; font-size: 16px; }
+    .card-body { padding: 18px 20px 20px; }
+
+    .dropzone {
+      position: relative; min-height: 390px; border: 1px dashed #3d4860; border-radius: 15px;
+      display: grid; place-items: center; overflow: hidden; background: #0d1118;
+      transition: .18s ease;
+    }
+    .dropzone.drag { border-color: var(--accent); background: rgba(124,140,255,.08); transform: translateY(-1px); }
+    .drop-empty { text-align: center; padding: 40px 20px; }
+    .drop-icon { width: 60px; height: 60px; margin: 0 auto 15px; border-radius: 16px; display: grid; place-items: center; background: linear-gradient(145deg, rgba(124,140,255,.2), rgba(158,124,255,.08)); border: 1px solid rgba(124,140,255,.34); font-size: 26px; }
+    .drop-empty strong { display: block; font-size: 18px; margin-bottom: 7px; }
+    .drop-empty span { color: var(--muted); font-size: 13px; }
+    .preview-wrap { width: 100%; height: 100%; display: none; place-items: center; position: relative; background: #080a0f; }
+    .preview-wrap.active { display: grid; }
+    video, .result-img { max-width: 100%; max-height: 520px; width: 100%; background: #080a0f; display: block; object-fit: contain; }
+    .file-strip { margin-top: 12px; display: none; gap: 10px; align-items: center; padding: 11px 12px; border: 1px solid var(--line); border-radius: 12px; background: #111620; }
+    .file-strip.active { display: flex; }
+    .file-name { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+    .file-meta { color: var(--muted); font-size: 12px; white-space: nowrap; }
+    .icon-btn { border: 1px solid var(--line); background: #171d27; color: #dce3ee; border-radius: 9px; padding: 7px 10px; }
+
+    .settings { display: grid; gap: 14px; }
+    .section-title { margin: 4px 0 -2px; color: #dbe2ee; font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    label.field { display: grid; gap: 7px; }
+    label.field > span { color: #c8d0dc; font-size: 12px; }
+    input[type="number"], select {
+      width: 100%; border: 1px solid var(--line); border-radius: 10px; background: #10151d; color: var(--text); padding: 10px 11px; outline: none;
+    }
+    input[type="number"]:focus, select:focus { border-color: #6979dc; box-shadow: 0 0 0 3px rgba(124,140,255,.12); }
+    .check { display: flex; align-items: center; gap: 9px; color: #c7d0dc; font-size: 12px; user-select: none; }
+    .check input { accent-color: var(--accent); }
+    .hint { font-size: 11px; color: var(--muted); line-height: 1.55; }
+    .quality-note { padding: 11px 12px; border: 1px solid #313a4b; background: #111721; border-radius: 11px; color: #aeb8c8; font-size: 12px; line-height: 1.6; }
+
+    .actions { display: grid; grid-template-columns: 1fr auto; gap: 10px; margin-top: 4px; }
+    .primary, .secondary, .danger {
+      border: 0; border-radius: 11px; padding: 12px 15px; font-weight: 750; transition: .15s ease;
+    }
+    .primary { color: white; background: linear-gradient(135deg, var(--accent), var(--accent2)); box-shadow: 0 8px 24px rgba(124,140,255,.22); }
+    .primary:hover:not(:disabled) { filter: brightness(1.06); transform: translateY(-1px); }
+    .primary:disabled { opacity: .45; cursor: not-allowed; box-shadow: none; }
+    .secondary { color: #d9e1ec; background: #1b2230; border: 1px solid #344055; }
+    .danger { color: #ffd8dd; background: rgba(255,107,122,.12); border: 1px solid rgba(255,107,122,.3); display: none; }
+    .danger.active { display: block; }
+
+    .progress-box { margin-top: 14px; display: none; }
+    .progress-box.active { display: block; }
+    .progress-line { display: flex; justify-content: space-between; gap: 12px; color: #bec7d4; font-size: 12px; margin-bottom: 7px; }
+    .bar { height: 9px; border-radius: 999px; background: #0d1118; overflow: hidden; border: 1px solid #252e3d; }
+    .bar > div { width: 0; height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent2)); transition: width .18s linear; }
+    .status { margin-top: 8px; color: var(--muted); font-size: 11px; min-height: 17px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+    .result { margin-top: 18px; display: none; }
+    .result.active { display: block; }
+    .result-grid { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 18px; }
+    .result-side { display: grid; align-content: start; gap: 10px; }
+    .stat { padding: 12px; background: #111620; border: 1px solid var(--line); border-radius: 11px; }
+    .stat small { display: block; color: var(--muted); margin-bottom: 4px; }
+    .stat strong { font-size: 15px; }
+    .download { text-decoration: none; text-align: center; color: white; background: linear-gradient(135deg, #2cba8b, #3ac8a3); padding: 12px; border-radius: 11px; font-weight: 800; }
+    .privacy { margin-top: 12px; display: flex; gap: 8px; align-items: start; color: #8792a4; font-size: 11px; line-height: 1.5; }
+    .privacy b { color: var(--good); font-weight: 700; }
+    .warn { color: var(--warn); }
+    .error { color: var(--danger); }
+
+    @media (max-width: 900px) {
+      .grid { grid-template-columns: 1fr; }
+      .result-grid { grid-template-columns: 1fr; }
+      .dropzone { min-height: 290px; }
+      header { align-items: start; flex-direction: column; }
+    }
+    @media (max-width: 520px) {
+      .row { grid-template-columns: 1fr; }
+      .app { width: min(100% - 18px, 1240px); padding-top: 16px; }
+      .card-head, .card-body { padding-left: 14px; padding-right: 14px; }
+    }
+  </style>
 </head>
 <body>
-<div class="app">
-  <div class="top">
-    <div><div class="brand">Frame<b>Forge</b></div><div class="sub">빠른 브라우저 GIF 변환 · 구간 선택 · 드래그 크롭 · 팔레트 최적화</div></div>
-    <div class="status"><span class="dot"></span><span id="status">브라우저 엔진 대기</span></div>
-  </div>
+  <main class="app">
+    <header>
+      <div class="brand">
+        <h1>Video → GIF Studio</h1>
+        <p>FFmpeg 팔레트 최적화 · Lanczos 리사이즈 · 브라우저 내부 처리</p>
+      </div>
+      <div class="badge">서버 업로드 없음</div>
+    </header>
 
-  <div class="grid">
-    <div>
-      <div class="card preview">
-        <div class="stage" id="stage">
-          <video id="video" controls playsinline></video>
-          <div id="empty" class="empty">
-            <div class="drop" id="drop"><div class="ico">🎞️</div><h2>영상을 드래그하거나 클릭해서 열기</h2><p>브라우저가 재생할 수 있는 MP4 / WebM / MOV 등을 사용할 수 있습니다.</p><input id="file" type="file" accept="video/*" class="hidden"></div>
+    <section class="grid">
+      <article class="card">
+        <div class="card-head">
+          <h2>원본 영상</h2>
+          <button id="pickBtn" class="secondary" type="button">영상 선택</button>
+        </div>
+        <div class="card-body">
+          <div id="dropzone" class="dropzone">
+            <div id="dropEmpty" class="drop-empty">
+              <div class="drop-icon">↥</div>
+              <strong>동영상을 끌어다 놓으세요</strong>
+              <span>MP4, WebM, MOV, MKV 등 · 파일은 외부 서버로 전송되지 않습니다.</span>
+            </div>
+            <div id="previewWrap" class="preview-wrap">
+              <video id="video" controls playsinline></video>
+            </div>
           </div>
-          <div id="crop" class="cropbox">
-            <i class="handle nw"></i><i class="handle ne"></i><i class="handle sw"></i><i class="handle se"></i>
+          <input id="fileInput" type="file" accept="video/*,.mkv,.mov,.avi,.m4v" hidden />
+          <div id="fileStrip" class="file-strip">
+            <div class="file-name" id="fileName">-</div>
+            <div class="file-meta" id="fileMeta">-</div>
+            <button id="removeBtn" class="icon-btn" type="button">지우기</button>
           </div>
+          <div class="privacy"><b>● 로컬 처리</b><span>영상 데이터는 브라우저의 WebAssembly 메모리에서 변환됩니다. FFmpeg 실행 파일만 CDN에서 최초 로드합니다.</span></div>
         </div>
-        <div class="tools">
-          <button id="open">영상 열기</button><button id="play">재생 / 일시정지</button><button id="cropToggle">크롭 켜기</button><button id="resetCrop">크롭 초기화</button><span class="file" id="filename">파일 없음</span>
-        </div>
-        <div class="timeline">
-          <div class="range"><div class="track"></div><div class="selected" id="selected"></div><input id="rs" type="range" min="0" max="1" step=".01" value="0"><input id="re" type="range" min="0" max="1" step=".01" value="1"></div>
-          <div class="times"><span id="st">00:00.00</span><span id="dt">00:00.00</span><span id="et">00:00.00</span></div>
-        </div>
-      </div>
-      <div class="out" id="out">
-        <div class="headline"><strong>변환 완료</strong><span class="badge">GIF</span></div>
-        <div class="info" style="margin-top:10px"><div class="stat"><i>파일 크기</i><b id="outSize">-</b></div><div class="stat"><i>길이</i><b id="outDur">-</b></div><div class="stat"><i>설정</i><b id="outSpec">-</b></div></div>
-        <a id="download" class="download"><button class="primary">GIF 저장</button></a>
-      </div>
-    </div>
+      </article>
 
-    <div class="card right">
-      <div class="section"><h3>Export</h3>
-        <div class="row">
-          <div class="field"><label>FPS <span id="fpsVal">12</span></label><input id="fps" type="range" min="5" max="30" value="12"></div>
-          <div class="field"><label>품질 <span id="qualVal">중간</span></label><input id="qual" type="range" min="1" max="10" value="5"></div>
-        </div>
-        <div class="field"><label>해상도</label><select id="size"><option value="original">원본</option><option value="720">최대 720px</option><option value="640" selected>최대 640px</option><option value="480">최대 480px</option><option value="360">최대 360px</option><option value="custom">직접 지정</option></select></div>
-        <div class="row hidden" id="custom"><div class="field"><label>너비</label><input id="cw" type="number" value="640" min="64" max="1920"></div><div class="field"><label>높이</label><input id="ch" type="number" value="360" min="64" max="1920"></div></div>
-        <div class="preset"><button data-p="light">가벼움</button><button data-p="balanced" class="primary">균형</button><button data-p="quality">고화질</button></div>
-      </div>
-      <div class="section"><h3>Optimization</h3>
-        <div class="toggle"><div><strong>전역 팔레트</strong><small>전체 영상에서 한 번만 256색 팔레트 생성 · 속도 우선</small></div><label class="switch"><input id="palette" type="checkbox" checked><span class="slider"></span></label></div>
-        <div class="toggle"><div><strong>Dither</strong><small>색 밴딩 감소 · CPU 사용량 증가</small></div><label class="switch"><input id="dither" type="checkbox"><span class="slider"></span></label></div>
-        <div class="toggle"><div><strong>프레임 건너뛰기</strong><small>FPS에 맞춰 정확한 간격으로 샘플링</small></div><label class="switch"><input id="loop" type="checkbox" checked><span class="slider"></span></label></div>
-      </div>
-      <div class="section"><h3>Range</h3><div class="row"><div class="field"><label>시작 (초)</label><input id="sn" type="number" min="0" step=".01" value="0"></div><div class="field"><label>종료 (초)</label><input id="en" type="number" min="0" step=".01" value="0"></div></div></div>
-      <div class="section"><h3>Info</h3>
-        <div class="info"><div class="stat"><i>원본</i><b id="res">-</b></div><div class="stat"><i>길이</i><b id="dur">-</b></div><div class="stat"><i>예상 프레임</i><b id="frames">-</b></div></div>
-        <div class="bar" id="bar"><i id="barI"></i></div><div class="log" id="log">영상을 열어주세요.</div>
-      </div>
-      <button id="convert" class="primary" style="width:100%;padding:13px" disabled>GIF로 변환</button>
-      <div class="fine">이 버전은 FFmpeg WASM을 사용하지 않습니다. 브라우저 내 Canvas + 최적화된 GIF 인코더를 사용해 file://에서도 작동하도록 구성했습니다. GIF 자체의 256색 제한 때문에 원본 영상과 완전히 동일한 색상은 사용할 수 없습니다.</div>
-    </div>
-  </div>
-</div>
+      <aside class="card">
+        <div class="card-head"><h2>GIF 설정</h2><span id="engineBadge" class="badge">엔진 대기</span></div>
+        <div class="card-body settings">
+          <div class="section-title">구간</div>
+          <div class="row">
+            <label class="field"><span>시작 (초)</span><input id="startTime" type="number" min="0" step="0.01" value="0" /></label>
+            <label class="field"><span>종료 (초)</span><input id="endTime" type="number" min="0" step="0.01" value="5" /></label>
+          </div>
+          <div class="row">
+            <button id="setStartBtn" class="secondary" type="button">현재 위치 → 시작</button>
+            <button id="setEndBtn" class="secondary" type="button">현재 위치 → 종료</button>
+          </div>
 
-<script>
-/* Fast, self-contained GIF encoder:
-   - global 256-color palette using median-cut
-   - optional ordered dithering
-   - GIF89a + LZW
-   No external workers / FFmpeg dependencies. */
-function medianCutPalette(rgba, maxColors){
-  const bins=new Map();
-  for(let i=0;i<rgba.length;i+=4){
-    const r=rgba[i]>>3,g=rgba[i+1]>>3,b=rgba[i+2]>>3;
-    const k=(r<<10)|(g<<5)|b;
-    let v=bins.get(k); if(v){v[0]++;v[1]+=r;v[2]+=g;v[3]+=b}else bins.set(k,[1,r,g,b]);
-  }
-  let points=[...bins.entries()].map(([k,v])=>({r:(k>>10)&31,g:(k>>5)&31,b:k&31,n:v[0],sr:v[1],sg:v[2],sb:v[3]}));
-  if(points.length<=maxColors) return points.map(p=>[Math.round(p.sr/p.n)<<3,Math.round(p.sg/p.n)<<3,Math.round(p.sb/p.n)<<3]);
-  let boxes=[points];
-  while(boxes.length<maxColors){
-    let bi=-1,score=-1;
-    for(let i=0;i<boxes.length;i++){
-      const b=boxes[i]; if(b.length<2) continue;
-      let r0=63,g0=63,b0=63,r1=0,g1=0,b1=0,total=0;
-      for(const p of b){r0=Math.min(r0,p.r);g0=Math.min(g0,p.g);b0=Math.min(b0,p.b);r1=Math.max(r1,p.r);g1=Math.max(g1,p.g);b1=Math.max(b1,p.b);total+=p.n}
-      const spread=Math.max(r1-r0,g1-g0,b1-b0);
-      const s=spread*total;
-      if(s>score){score=s;bi=i}
+          <div class="section-title">출력</div>
+          <div class="row">
+            <label class="field"><span>최대 너비</span><input id="width" type="number" min="64" max="1920" step="2" value="720" /></label>
+            <label class="field"><span>FPS</span>
+              <select id="fps">
+                <option value="10">10 — 작은 용량</option>
+                <option value="12">12</option>
+                <option value="15" selected>15 — 권장</option>
+                <option value="20">20</option>
+                <option value="24">24 — 부드러움</option>
+                <option value="30">30 — 매우 큼</option>
+              </select>
+            </label>
+          </div>
+          <label class="check"><input id="noUpscale" type="checkbox" checked /> 원본보다 크게 확대하지 않기</label>
+
+          <div class="section-title">색상 / 팔레트</div>
+          <label class="field"><span>팔레트 전략</span>
+            <select id="paletteMode">
+              <option value="global" selected>전체 영상 안정형 — 기본 추천</option>
+              <option value="motion">움직임 우선 — 고정 배경 영상</option>
+              <option value="frame">프레임별 최고 색 정확도 — 용량 증가</option>
+            </select>
+          </label>
+          <div class="row">
+            <label class="field"><span>최대 색상 수</span>
+              <select id="colors">
+                <option value="128">128</option>
+                <option value="192">192</option>
+                <option value="256" selected>256 — 최고 품질</option>
+              </select>
+            </label>
+            <label class="field"><span>디더링</span>
+              <select id="dither">
+                <option value="sierra2_4a" selected>Sierra2 4A — 권장</option>
+                <option value="floyd_steinberg">Floyd–Steinberg</option>
+                <option value="bayer">Bayer — 작은 용량</option>
+                <option value="none">없음 — 평면 그래픽</option>
+              </select>
+            </label>
+          </div>
+          <div id="qualityNote" class="quality-note">영상 전체를 분석해 하나의 256색 팔레트를 만들기 때문에 색이 안정적이고 깜빡임이 적습니다.</div>
+
+          <div class="actions">
+            <button id="convertBtn" class="primary" type="button" disabled>고품질 GIF 만들기</button>
+            <button id="cancelBtn" class="danger" type="button">취소</button>
+          </div>
+          <div id="progressBox" class="progress-box">
+            <div class="progress-line"><span id="progressLabel">준비 중</span><span id="progressPct">0%</span></div>
+            <div class="bar"><div id="progressBar"></div></div>
+            <div id="status" class="status">FFmpeg 엔진을 준비합니다.</div>
+          </div>
+          <div id="runtimeHint" class="hint">첫 변환 시 FFmpeg WebAssembly 엔진(약 수십 MB)을 내려받습니다. 긴 영상·고해상도·고FPS는 브라우저 메모리를 많이 사용합니다.</div>
+        </div>
+      </aside>
+    </section>
+
+    <section id="result" class="card result">
+      <div class="card-head"><h2>변환 결과</h2><span id="resultMode" class="badge">GIF</span></div>
+      <div class="card-body result-grid">
+        <div class="preview-wrap active"><img id="resultImg" class="result-img" alt="변환된 GIF 미리보기" /></div>
+        <div class="result-side">
+          <div class="stat"><small>파일 크기</small><strong id="resultSize">-</strong></div>
+          <div class="stat"><small>출력 설정</small><strong id="resultSpec">-</strong></div>
+          <div class="stat"><small>변환 구간</small><strong id="resultDuration">-</strong></div>
+          <a id="downloadBtn" class="download" download="converted.gif">GIF 다운로드</a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script type="module">
+    const FFMPEG_VERSION = '0.12.15';
+    const UTIL_VERSION = '0.12.2';
+    const CORE_VERSION = '0.12.10';
+
+    const $ = (id) => document.getElementById(id);
+    const els = {
+      pickBtn: $('pickBtn'), fileInput: $('fileInput'), dropzone: $('dropzone'), dropEmpty: $('dropEmpty'),
+      previewWrap: $('previewWrap'), video: $('video'), fileStrip: $('fileStrip'), fileName: $('fileName'),
+      fileMeta: $('fileMeta'), removeBtn: $('removeBtn'), startTime: $('startTime'), endTime: $('endTime'),
+      setStartBtn: $('setStartBtn'), setEndBtn: $('setEndBtn'), width: $('width'), fps: $('fps'), noUpscale: $('noUpscale'),
+      paletteMode: $('paletteMode'), colors: $('colors'), dither: $('dither'), qualityNote: $('qualityNote'),
+      convertBtn: $('convertBtn'), cancelBtn: $('cancelBtn'), progressBox: $('progressBox'), progressLabel: $('progressLabel'),
+      progressPct: $('progressPct'), progressBar: $('progressBar'), status: $('status'), engineBadge: $('engineBadge'),
+      result: $('result'), resultImg: $('resultImg'), resultSize: $('resultSize'), resultSpec: $('resultSpec'),
+      resultDuration: $('resultDuration'), downloadBtn: $('downloadBtn'), resultMode: $('resultMode'), runtimeHint: $('runtimeHint')
+    };
+
+    let inputFile = null;
+    let inputURL = null;
+    let resultURL = null;
+    let ffmpeg = null;
+    let FFmpegClass = null;
+    let fetchFile = null;
+    let toBlobURL = null;
+    let classWorkerURL = null;
+    let engineLoaded = false;
+    let converting = false;
+    let expectedDuration = 1;
+
+    const fmtBytes = (n) => {
+      if (!Number.isFinite(n)) return '-';
+      const u = ['B','KB','MB','GB']; let i = 0; let v = n;
+      while (v >= 1024 && i < u.length - 1) { v /= 1024; i++; }
+      return `${v >= 100 ? v.toFixed(0) : v >= 10 ? v.toFixed(1) : v.toFixed(2)} ${u[i]}`;
+    };
+    const clamp = (n, a, b) => Math.min(b, Math.max(a, n));
+    const setProgress = (p, label, status) => {
+      const pct = clamp(Number.isFinite(p) ? p : 0, 0, 1);
+      els.progressBox.classList.add('active');
+      els.progressBar.style.width = `${(pct * 100).toFixed(1)}%`;
+      els.progressPct.textContent = `${Math.round(pct * 100)}%`;
+      if (label) els.progressLabel.textContent = label;
+      if (status) els.status.textContent = status;
+    };
+    const setBusy = (busy) => {
+      converting = busy;
+      els.convertBtn.disabled = busy || !inputFile;
+      els.cancelBtn.classList.toggle('active', busy);
+      els.pickBtn.disabled = busy;
+      els.removeBtn.disabled = busy;
+    };
+
+    function updateQualityNote() {
+      const mode = els.paletteMode.value;
+      const notes = {
+        global: '영상 전체를 분석해 하나의 팔레트를 만듭니다. 색이 안정적이고 장면 간 깜빡임이 적어 일반 영상에 가장 무난합니다.',
+        motion: '이전 프레임과 달라진 영역에 더 큰 비중을 줍니다. 배경은 고정되고 캐릭터·피사체가 움직이는 영상에서 팔레트 낭비를 줄이기 좋습니다.',
+        frame: '각 프레임마다 새 팔레트를 만듭니다. 작은 대비색과 순간적으로 등장하는 색을 가장 잘 보존하지만 GIF 용량이 크게 늘 수 있습니다.'
+      };
+      els.qualityNote.textContent = notes[mode];
     }
-    if(bi<0)break;
-    const box=boxes[bi]; let r0=99,g0=99,b0=99,r1=-1,g1=-1,b1=-1;
-    for(const p of box){r0=Math.min(r0,p.r);g0=Math.min(g0,p.g);b0=Math.min(b0,p.b);r1=Math.max(r1,p.r);g1=Math.max(g1,p.g);b1=Math.max(b1,p.b)}
-    const axis=(r1-r0)>=Math.max(g1-g0,b1-b0)?'r':(g1-g0)>=b1-b0?'g':'b';
-    box.sort((a,b)=>a[axis]-b[axis]);
-    let total=0;for(const p of box)total+=p.n;
-    let acc=0,cut=1;for(let i=0;i<box.length-1;i++){acc+=box[i].n;if(acc>=total/2){cut=i+1;break}}
-    boxes.splice(bi,1,box.slice(0,cut),box.slice(cut));
-  }
-  return boxes.map(box=>{let n=0,r=0,g=0,b=0;for(const p of box){n+=p.n;r+=p.sr;g+=p.sg;b+=p.sb}return [Math.round(r/n)<<3,Math.round(g/n)<<3,Math.round(b/n)<<3]});
-}
-function nearestMap(palette){
-  const lut=new Uint8Array(32*32*32);
-  for(let r=0;r<32;r++)for(let g=0;g<32;g++)for(let b=0;b<32;b++){
-    let best=0,bd=1e12,rr=r*8,gg=g*8,bb=b*8;
-    for(let i=0;i<palette.length;i++){const dr=rr-palette[i][0],dg=gg-palette[i][1],db=bb-palette[i][2],d=dr*dr+dg*dg+db*db;if(d<bd){bd=d;best=i}}
-    lut[(r<<10)|(g<<5)|b]=best;
-  }
-  return lut;
-}
-class BitWriter{constructor(){this.a=[];this.cur=0;this.bits=0}write(v,n){while(n){const take=Math.min(n,8-this.bits);this.cur|=(v&((1<<take)-1))<<this.bits;this.bits+=take;v>>=take;n-=take;if(this.bits===8){this.a.push(this.cur);this.cur=0;this.bits=0}}}finish(){if(this.bits)this.a.push(this.cur);return new Uint8Array(this.a)}}
-function lzw(indices,minCodeSize=8){
-  const clear=1<<minCodeSize,end=clear+1;let codeSize=minCodeSize+1,next=end+1;
-  let dict=new Map();const bw=new BitWriter();bw.write(clear,codeSize);
-  let prefix=indices[0];
-  for(let i=1;i<indices.length;i++){
-    const k=indices[i], key=(prefix<<8)|k, val=dict.get(key);
-    if(val!==undefined){prefix=val;continue}
-    bw.write(prefix,codeSize);
-    if(next<4096){if(next===(1<<codeSize)&&codeSize<12)codeSize++;dict.set(key,next++)}else{bw.write(clear,codeSize);dict.clear();codeSize=minCodeSize+1;next=end+1}
-    prefix=k;
-  }
-  bw.write(prefix,codeSize);bw.write(end,codeSize);
-  const raw=bw.finish(),chunks=[];for(let i=0;i<raw.length;i+=255)chunks.push(raw.subarray(i,Math.min(i+255,raw.length)));
-  const out=[minCodeSize];for(const c of chunks){out.push(c.length);for(const x of c)out.push(x)}out.push(0);return new Uint8Array(out);
-}
-function u16(a,v){a.push(v&255,(v>>>8)&255)}
-function makeGif(frames,w,h,palette,delay,loop){
-  const out=[];for(const c of [71,73,70,56,57,97])out.push(c);u16(out,w);u16(out,h);out.push(0xF7,0,0);
-  for(let i=0;i<256;i++){const p=palette[i]||[0,0,0];out.push(p[0],p[1],p[2])}
-  if(loop){out.push(0x21,0xFF,11,78,69,84,83,67,65,80,69,50,46,48,3,1,0,0,0)}
-  for(const fr of frames){
-    out.push(0x21,0xF9,4,0,delay&255,(delay>>>8)&255,0,0);
-    out.push(0x00,0x2C);u16(out,0);u16(out,0);u16(out,w);u16(out,h);out.push(0);
-    const data=lzw(fr,8);for(const x of data)out.push(x);
-  }
-  out.push(0x3B);return new Uint8Array(out);
-}
-function makeGif(frames, w, h, palette, delay, loop) {
-  const out = [];
-  for (const c of [71, 73, 70, 56, 57, 97]) out.push(c); // GIF89a
-  u16(out, w); u16(out, h);
-  out.push(0xF7, 0, 0); // Global Color Table
-  
-  for (let i = 0; i < 256; i++) {
-    const p = palette[i] || [0, 0, 0];
-    out.push(p[0], p[1], p[2]);
-  }
-  
-  if (loop) {
-    out.push(0x21, 0xFF, 11, 78, 69, 84, 83, 67, 65, 80, 69, 50, 46, 48, 3, 1, 0, 0, 0);
-  }
-  
-  for (const fr of frames) {
-    // 0x04: Disposal Method 1 (이전 프레임 유지) 추가
-    out.push(0x21, 0xF9, 4, 0x04, delay & 255, (delay >>> 8) & 255, 0, 0);
-    out.push(0x2C); u16(out, 0); u16(out, 0); u16(out, w); u16(out, h); out.push(0);
-    
-    const data = lzw(fr, 8);
-    for (const x of data) out.push(x);
-  }
-  out.push(0x3B);
-  return new Uint8Array(out);
-}
+    els.paletteMode.addEventListener('change', updateQualityNote);
 
-function mapFrame(rgba,w,h,lut,palette,dither){
-  const idx=new Uint8Array(w*h);
-  const off=[[0,0],[0.5,0.5],[-0.5,0.5],[0.5,-0.5],[-0.5,-0.5]];
-  for(let y=0,p=0;y<h;y++)for(let x=0;x<w;x++,p++){
-    let r=rgba[p*4],g=rgba[p*4+1],b=rgba[p*4+2];
-    if(dither){const t=((x&1)+((y&1)<<1));const delta=[-8,4,8,0][t];r=Math.max(0,Math.min(255,r+delta));g=Math.max(0,Math.min(255,g+delta));b=Math.max(0,Math.min(255,b+delta))}
-    idx[p]=lut[((r>>3)<<10)|((g>>3)<<5)|(b>>3)];
-  }
-  return idx;
-}
+    async function loadModules() {
+      if (FFmpegClass) return;
+      els.engineBadge.textContent = '모듈 로드 중';
+      const [{ FFmpeg }, util] = await Promise.all([
+        import(`https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@${FFMPEG_VERSION}/dist/esm/index.js`),
+        import(`https://cdn.jsdelivr.net/npm/@ffmpeg/util@${UTIL_VERSION}/dist/esm/index.js`)
+      ]);
+      FFmpegClass = FFmpeg;
+      fetchFile = util.fetchFile;
+      toBlobURL = util.toBlobURL;
 
-const $=id=>document.getElementById(id), video=$("video"),stage=$("stage"),crop=$("crop"),fileInput=$("file");
-let file=null,url=null,busy=false,outUrl=null,cropEnabled=false;
-const state={x:0,y:0,w:1,h:1};let action=null,startPt=null,startState=null;
+      // CDN에서 @ffmpeg/ffmpeg를 불러와도 class worker는 현재 페이지에서 생성한 blob을 통해 시작한다.
+      // 그 worker 내부에서 CDN의 공식 worker 모듈을 import하므로 상대 import(const.js/errors.js)도 정상 해석된다.
+      const workerBootstrap = `import \"https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@${FFMPEG_VERSION}/dist/esm/worker.js\";`;
+      classWorkerURL = URL.createObjectURL(new Blob([workerBootstrap], { type: 'text/javascript' }));
+    }
 
-function fmt(s){s=Math.max(0,s||0);return String(Math.floor(s/60)).padStart(2,"0")+":"+ (s%60).toFixed(2).padStart(5,"0")}
-function log(t){$("log").textContent=t}
-function updateRange(src){
-  if(!video.duration)return;
-  if(src==="s"){if(+$("rs").value>+$("re").value)$("re").value=$("rs").value}
-  if(src==="e"){if(+$("re").value<+$("rs").value)$("rs").value=$("re").value}
-  if(src==="sn")$("rs").value=Math.max(0,Math.min(video.duration,+$("sn").value||0));
-  if(src==="en")$("re").value=Math.max(0,Math.min(video.duration,+$("en").value||0));
-  $("sn").value=(+$("rs").value).toFixed(2);$("en").value=(+$("re").value).toFixed(2);
-  $("st").textContent=fmt(+$("rs").value);$("et").textContent=fmt(+$("re").value);$("dt").textContent=fmt(video.duration);
-  const a=+$("rs").value/video.duration*100,b=+$("re").value/video.duration*100;$("selected").style.left=a+"%";$("selected").style.width=(b-a)+"%";
-  $("frames").textContent=Math.max(0,Math.round((+$("re").value-+$("rs").value)*(+$("fps").value)));
-}
-["rs","re"].forEach(id=>$(id).oninput=()=>updateRange(id==="rs"?"s":"e"));$("sn").onchange=()=>updateRange("sn");$("en").onchange=()=>updateRange("en");
-$("fps").oninput=()=>{$("fpsVal").textContent=$("fps").value;updateRange("s")};
-$("qual").oninput=()=>{$("qualVal").textContent=+$("qual").value<=3?"낮음":+$("qual").value>=8?"높음":"중간"};
-$("size").onchange=()=>document.querySelector("#custom").classList.toggle("hidden",$("size").value!=="custom");
+    async function initEngine() {
+      if (engineLoaded && ffmpeg) return;
+      await loadModules();
+      ffmpeg = new FFmpegClass();
 
-function load(f){if(!f||!f.type.startsWith("video/"))return;if(url)URL.revokeObjectURL(url);file=f;url=URL.createObjectURL(f);video.src=url;video.load();$("empty").classList.add("hidden");$("filename").textContent=f.name;$("convert").disabled=false;log("영상 로드 완료");}
-$("drop").onclick=()=>fileInput.click();$("open").onclick=()=>fileInput.click();fileInput.onchange=e=>load(e.target.files?.[0]);
-$("drop").ondragover=e=>e.preventDefault();$("drop").ondrop=e=>{e.preventDefault();load(e.dataTransfer.files?.[0])};
-$("play").onclick=()=>video.paused?video.play():video.pause();
-$("resetCrop").onclick=()=>setCrop(0,0,1,1);
-video.onloadedmetadata=()=>{ $("res").textContent=video.videoWidth+"×"+video.videoHeight;$("dur").textContent=fmt(video.duration);$("rs").max=$("re").max=video.duration;$("re").value=video.duration;$("en").value=video.duration.toFixed(2);updateRange("e");setCrop(0,0,1,1);};
+      ffmpeg.on('log', ({ message }) => {
+        if (!converting) return;
+        if (message) els.status.textContent = message.length > 150 ? message.slice(0, 147) + '…' : message;
+      });
+      ffmpeg.on('progress', ({ progress, time }) => {
+        if (!converting) return;
+        // complex filter에서는 progress 값이 부정확할 수 있어 time 기반 값을 우선 보정한다.
+        const t = Number(time) / 1_000_000;
+        let p = Number(progress);
+        if (Number.isFinite(t) && expectedDuration > 0) p = Math.max(p || 0, t / expectedDuration);
+        setProgress(Math.min(p || 0, .985), 'GIF 인코딩 중');
+      });
 
-function setCrop(x,y,w,h){state.x=Math.max(0,Math.min(1-w,x));state.y=Math.max(0,Math.min(1-h,y));state.w=Math.max(.05,Math.min(1,state.w=w));state.h=Math.max(.05,Math.min(1,state.h=h));renderCrop()}
-function renderCrop(){if(!cropEnabled){crop.style.display="none";return}const r=video.getBoundingClientRect(),s=stage.getBoundingClientRect();const x=(r.left-s.left)+state.x*r.width,y=(r.top-s.top)+state.y*r.height;crop.style.display="block";crop.style.left=x+"px";crop.style.top=y+"px";crop.style.width=state.w*r.width+"px";crop.style.height=state.h*r.height+"px"}
-window.addEventListener("resize",renderCrop);$("cropToggle").onclick=()=>{cropEnabled=!cropEnabled;$("cropToggle").textContent=cropEnabled?"크롭 끄기":"크롭 켜기";renderCrop()};
+      const canMT = crossOriginIsolated && typeof SharedArrayBuffer !== 'undefined';
+      const corePkg = canMT ? '@ffmpeg/core-mt' : '@ffmpeg/core';
+      const coreBase = `https://cdn.jsdelivr.net/npm/${corePkg}@${CORE_VERSION}/dist/esm`;
+      els.engineBadge.textContent = canMT ? '멀티스레드 로드' : '싱글스레드 로드';
+      setProgress(.03, '엔진 로드 중', canMT ? '멀티스레드 FFmpeg를 준비합니다.' : 'FFmpeg WebAssembly를 준비합니다.');
 
-function pos(e){const r=stage.getBoundingClientRect();return{x:e.clientX-r.left,y:e.clientY-r.top}}
-crop.addEventListener("pointerdown",e=>{e.preventDefault();const cls=e.target.className;action=cls.includes("nw")?"nw":cls.includes("ne")?"ne":cls.includes("sw")?"sw":cls.includes("se")?"se":"move";startPt=pos(e);startState={...state};crop.setPointerCapture(e.pointerId)});
-crop.addEventListener("pointermove",e=>{if(!action)return;const r=video.getBoundingClientRect();let {x,y,w,h}=startState;
-  if(action==="move"){x=startState.x+((e.clientX-startPt.x)/r.width);y=startState.y+((e.clientY-startPt.y)/r.height)}
-  if(action.includes("n")){y=startState.y+((e.clientY-startPt.y)/r.height);h=startState.h-((e.clientY-startPt.y)/r.height)}
-  if(action.includes("s"))h=startState.h+((e.clientY-startPt.y)/r.height)
-  if(action.includes("w")){x=startState.x+((e.clientX-startPt.x)/r.width);w=startState.w-((e.clientX-startPt.x)/r.width)}
-  if(action.includes("e"))w=startState.w+((e.clientX-startPt.x)/r.width)
-  w=Math.max(.05,w);h=Math.max(.05,h);x=Math.max(0,Math.min(1-w,x));y=Math.max(0,Math.min(1-h,y));setCrop(x,y,w,h);});
-crop.addEventListener("pointerup",()=>action=null);
+      const config = {
+        classWorkerURL,
+        coreURL: await toBlobURL(`${coreBase}/ffmpeg-core.js`, 'text/javascript'),
+        wasmURL: await toBlobURL(`${coreBase}/ffmpeg-core.wasm`, 'application/wasm')
+      };
+      if (canMT) config.workerURL = await toBlobURL(`${coreBase}/ffmpeg-core.worker.js`, 'text/javascript');
 
-function targetSize(){
-  let W=video.videoWidth,H=video.videoHeight;
-  let sx=state.x,sy=state.y,sw=state.w,sh=state.h;
-  W=Math.max(2,Math.round(W*sw));H=Math.max(2,Math.round(H*sh));
-  const mode=$("size").value;
-  if(mode==="custom"){W=+$("cw").value;H=+$("ch").value}
-  else if(mode!=="original"){const m=+mode,scale=Math.min(1,m/Math.max(W,H));W=Math.max(2,Math.round(W*scale));H=Math.max(2,Math.round(H*scale))}
-  W=Math.floor(W/2)*2;H=Math.floor(H/2)*2;return [Math.max(2,W),Math.max(2,H)];
-}
-function seek(t){return new Promise((resolve,reject)=>{const done=()=>{video.removeEventListener("seeked",done);resolve()};video.addEventListener("seeked",done,{once:true});video.currentTime=Math.min(video.duration,Math.max(0,t));setTimeout(()=>resolve(),1500)})}
-async function captureFrame(ctx, w, h) {
-  const sourceW = video.videoWidth, sourceH = video.videoHeight;
-  const sx = Math.round(state.x * sourceW), sy = Math.round(state.y * sourceH);
-  const sw = Math.max(2, Math.round(state.w * sourceW)), sh = Math.max(2, Math.round(state.h * sourceH));
-  
-  // 캔버스 배경을 흰색으로 채워 투명도 버그 방지
-  ctx.fillStyle = "#ffffff";
-  ctx.fillRect(0, 0, w, h);
-  ctx.drawImage(video, sx, sy, sw, sh, 0, 0, w, h);
-  
-  const imgData = ctx.getImageData(0, 0, w, h).data;
-  
-  // 디버깅: 첫 프레임이 완전히 검은색(0,0,0)인지 확인
-  if (imgData[0] === 0 && imgData[1] === 0 && imgData[2] === 0 && imgData[3] === 0) {
-     console.warn("⚠️ 캔버스 픽셀이 비어있습니다! 로컬 보안 정책(CORS) 차단일 수 있습니다.");
-  }
-  return imgData;
-}
-function qualityColors(){const q=+$("qual").value;return q<=3?128:q<=7?192:256}
+      await ffmpeg.load(config);
+      engineLoaded = true;
+      els.engineBadge.textContent = canMT ? 'FFmpeg MT 준비됨' : 'FFmpeg 준비됨';
+      els.runtimeHint.textContent = canMT
+        ? '이 페이지는 cross-origin isolated 상태라 멀티스레드 FFmpeg를 사용합니다.'
+        : '현재는 싱글스레드 FFmpeg를 사용합니다. 서비스 배포 시 COOP/COEP 헤더를 설정하면 지원 브라우저에서 멀티스레드 코어를 사용할 수 있습니다.';
+    }
 
-$("convert").onclick=async()=>{
- if(!file||busy)return;busy=true;$("convert").disabled=true;$("status").textContent="변환 중…";$("out").style.display="none";$("bar").style.display="block";$("barI").style.width="0%";
- const started=performance.now();
- try{
-  const [W,H]=targetSize(),fps=+$("fps").value,start=+$("rs").value,end=+$("re").value,dur=Math.max(.01,end-start),count=Math.max(1,Math.floor(dur*fps)+1),delay=Math.max(2,Math.round(100/fps));
-  const off=document.createElement("canvas");off.width=W;off.height=H;const ctx=off.getContext("2d",{willReadFrequently:true});
-  const samples=[];const sampleFrames=Math.min(10,count);
-  log(`프레임 분석 중…\\n${W}×${H} · ${fps} FPS · ${count} frames`);
-  for(let i=0;i<sampleFrames;i++){await seek(start+(dur*(i/(Math.max(1,sampleFrames-1)))));samples.push(await captureFrame(ctx,W,H));$("barI").style.width=((i+1)/sampleFrames*25)+"%";await new Promise(r=>setTimeout(r,0))}
-  let palette;
-  if($("palette").checked){
-    let total=0;const stride=Math.max(4,Math.floor((W*H)/25000));const packed=new Uint8ClampedArray(samples.length*Math.ceil((W*H)/stride)*4);let q=0;
-    for(const f of samples)for(let i=0;i<f.length;i+=4*stride){packed[q++]=f[i];packed[q++]=f[i+1];packed[q++]=f[i+2];packed[q++]=255}
-    palette=medianCutPalette(packed.slice(0,q),qualityColors());
-  }else{
-    palette=[];const base=samples[0];for(let i=0;i<base.length&&palette.length<qualityColors();i+=4*7)palette.push([base[i],base[i+1],base[i+2]]);
-    if(!palette.length)palette=[[0,0,0]];
-  }
-  while(palette.length<256)palette.push([0,0,0]);const lut=nearestMap(palette);
-  $("barI").style.width="30%";log(`팔레트 준비 완료\\n256색 글로벌 팔레트 · 인코딩 시작…`);
-  const frames=[];const useDither=$("dither").checked;
-  for(let i=0;i<count;i++){
-    const t=start+Math.min(dur-0.001,i/fps);await seek(t);const rgba=await captureFrame(ctx,W,H);frames.push(mapFrame(rgba,W,H,lut,palette,useDither));
-    $("barI").style.width=(30+(i+1)/count*65)+"%";if(i%2===0)await new Promise(r=>setTimeout(r,0));
-  }
-  const bytes=makeGif(frames,W,H,palette,delay,$("loop").checked);
-  const blob=new Blob([bytes],{type:"image/gif"});if(outUrl)URL.revokeObjectURL(outUrl);outUrl=URL.createObjectURL(blob);
-  $("download").href=outUrl;$("download").download=(file.name.replace(/\.[^.]+$/,"")||"converted")+".gif";
-  $("outSize").textContent=(blob.size/1048576).toFixed(2)+" MB";$("outDur").textContent=fmt(dur);$("outSpec").textContent=`${W}×${H} · ${fps}fps`;
-  $("out").style.display="block";$("barI").style.width="100%";log(`완료\\n${(blob.size/1048576).toFixed(2)} MB\\n처리 시간 ${((performance.now()-started)/1000).toFixed(1)}s`);
- }catch(e){console.error(e);log("변환 실패\\n"+(e?.message||e));alert("변환 실패: "+(e?.message||e))}
- finally{busy=false;$("convert").disabled=false;$("status").textContent="브라우저 엔진 준비";setTimeout(()=>$("bar").style.display="none",400)}
-};
+    function setFile(file) {
+      if (!file) return;
+      if (!file.type.startsWith('video/') && !/\.(mkv|mov|avi|m4v|mp4|webm)$/i.test(file.name)) {
+        alert('동영상 파일을 선택해 주세요.');
+        return;
+      }
+      inputFile = file;
+      if (inputURL) URL.revokeObjectURL(inputURL);
+      inputURL = URL.createObjectURL(file);
+      els.video.src = inputURL;
+      els.dropEmpty.style.display = 'none';
+      els.previewWrap.classList.add('active');
+      els.fileStrip.classList.add('active');
+      els.fileName.textContent = file.name;
+      els.fileMeta.textContent = fmtBytes(file.size);
+      els.convertBtn.disabled = false;
+      els.result.classList.remove('active');
+      els.video.load();
+      els.video.onloadedmetadata = () => {
+        const d = Number.isFinite(els.video.duration) ? els.video.duration : 0;
+        els.startTime.value = '0';
+        els.endTime.value = d ? Math.min(d, 8).toFixed(2) : '5';
+        els.startTime.max = d || '';
+        els.endTime.max = d || '';
+        els.fileMeta.textContent = `${fmtBytes(file.size)}${d ? ` · ${d.toFixed(2)}초 · ${els.video.videoWidth}×${els.video.videoHeight}` : ''}`;
+        if (d > 30) els.runtimeHint.innerHTML = '<span class="warn">긴 영상입니다.</span> GIF는 보통 짧은 구간 변환이 적합합니다. 5~12초 구간부터 테스트하는 것을 권장합니다.';
+      };
+      // 다음 변환 전에 엔진 로드를 미리 시작해 체감 대기 시간을 줄인다.
+      initEngine().catch((err) => {
+        console.error(err);
+        els.engineBadge.textContent = '엔진 로드 실패';
+        els.status.innerHTML = `<span class="error">${String(err?.message || err)}</span>`;
+      });
+    }
 
-document.querySelectorAll("[data-p]").forEach(b=>b.onclick=()=>{
- const p=b.dataset.p;if(p==="light"){$("fps").value=8;$("qual").value=3;$("size").value="480";$("palette").checked=true;$("dither").checked=false}
- if(p==="balanced"){$("fps").value=12;$("qual").value=5;$("size").value="640";$("palette").checked=true;$("dither").checked=false}
- if(p==="quality"){$("fps").value=18;$("qual").value=8;$("size").value="720";$("palette").checked=true;$("dither").checked=true}
- $("fpsVal").textContent=$("fps").value;$("qualVal").textContent=+$("qual").value<=3?"낮음":+$("qual").value>=8?"높음":"중간";document.querySelector("#custom").classList.toggle("hidden",$("size").value!=="custom");updateRange("s")
-});
-</script>
+    function clearFile() {
+      if (converting) return;
+      inputFile = null;
+      if (inputURL) URL.revokeObjectURL(inputURL);
+      inputURL = null;
+      els.video.removeAttribute('src'); els.video.load();
+      els.dropEmpty.style.display = '';
+      els.previewWrap.classList.remove('active');
+      els.fileStrip.classList.remove('active');
+      els.convertBtn.disabled = true;
+      els.result.classList.remove('active');
+    }
+
+    els.pickBtn.addEventListener('click', () => els.fileInput.click());
+    els.fileInput.addEventListener('change', (e) => { setFile(e.target.files?.[0]); e.target.value = ''; });
+    els.removeBtn.addEventListener('click', clearFile);
+    ['dragenter','dragover'].forEach(ev => els.dropzone.addEventListener(ev, (e) => { e.preventDefault(); els.dropzone.classList.add('drag'); }));
+    ['dragleave','drop'].forEach(ev => els.dropzone.addEventListener(ev, (e) => { e.preventDefault(); els.dropzone.classList.remove('drag'); }));
+    els.dropzone.addEventListener('drop', (e) => setFile(e.dataTransfer?.files?.[0]));
+    els.dropzone.addEventListener('dblclick', () => { if (!converting) els.fileInput.click(); });
+    els.setStartBtn.addEventListener('click', () => { if (inputFile) els.startTime.value = els.video.currentTime.toFixed(2); });
+    els.setEndBtn.addEventListener('click', () => { if (inputFile) els.endTime.value = els.video.currentTime.toFixed(2); });
+
+    function buildFilter() {
+      const fps = clamp(parseInt(els.fps.value, 10) || 15, 1, 60);
+      const width = clamp(parseInt(els.width.value, 10) || 720, 64, 1920);
+      const colors = clamp(parseInt(els.colors.value, 10) || 256, 2, 256);
+      const mode = els.paletteMode.value;
+      const stats = mode === 'motion' ? 'diff' : mode === 'frame' ? 'single' : 'full';
+      const paletteNew = mode === 'frame' ? ':new=1' : ':new=0';
+      const scale = els.noUpscale.checked
+        ? `scale=w='min(iw,${width})':h=-2:flags=lanczos`
+        : `scale=w=${width}:h=-2:flags=lanczos`;
+      const dither = els.dither.value;
+      const ditherExtra = dither === 'bayer' ? ':bayer_scale=3' : '';
+      const diffMode = mode === 'frame' ? '' : ':diff_mode=rectangle';
+      return `[0:v]fps=${fps},${scale},split[s0][s1];` +
+        `[s0]palettegen=max_colors=${colors}:reserve_transparent=0:stats_mode=${stats}[p];` +
+        `[s1][p]paletteuse=dither=${dither}${ditherExtra}${diffMode}${paletteNew}`;
+    }
+
+    async function safeDelete(path) {
+      try { if (ffmpeg) await ffmpeg.deleteFile(path); } catch (_) {}
+    }
+
+    async function convert() {
+      if (!inputFile || converting) return;
+      const start = Math.max(0, parseFloat(els.startTime.value) || 0);
+      const endRaw = parseFloat(els.endTime.value);
+      const videoDuration = Number.isFinite(els.video.duration) ? els.video.duration : Infinity;
+      const end = Math.min(Number.isFinite(endRaw) ? endRaw : start + 5, videoDuration);
+      if (!(end > start)) { alert('종료 시간은 시작 시간보다 커야 합니다.'); return; }
+      expectedDuration = end - start;
+      if (expectedDuration > 30 && !confirm('30초가 넘는 GIF는 브라우저 메모리와 파일 크기가 매우 커질 수 있습니다. 계속할까요?')) return;
+
+      setBusy(true);
+      els.result.classList.remove('active');
+      setProgress(.01, '준비 중', 'FFmpeg 엔진을 확인합니다.');
+
+      const inputExt = (inputFile.name.match(/\.([a-z0-9]+)$/i)?.[1] || 'mp4').toLowerCase();
+      const inputName = `input_${Date.now()}.${inputExt}`;
+      const outputName = `output_${Date.now()}.gif`;
+
+      try {
+        await initEngine();
+        setProgress(.06, '영상 로드 중', `${fmtBytes(inputFile.size)} 파일을 WebAssembly 파일 시스템으로 복사합니다.`);
+        await ffmpeg.writeFile(inputName, await fetchFile(inputFile));
+
+        const filter = buildFilter();
+        const args = [
+          '-ss', start.toFixed(3),
+          '-i', inputName,
+          '-t', expectedDuration.toFixed(3),
+          '-an',
+          '-filter_complex', filter,
+          '-loop', '0',
+          outputName
+        ];
+
+        setProgress(.10, 'GIF 인코딩 중', '팔레트 분석 + 디더링 인코딩을 수행합니다.');
+        const code = await ffmpeg.exec(args);
+        if (code !== 0) throw new Error(`FFmpeg 종료 코드 ${code}`);
+
+        setProgress(.99, '결과 읽는 중', '완성된 GIF를 브라우저로 가져옵니다.');
+        const data = await ffmpeg.readFile(outputName);
+        const bytes = data instanceof Uint8Array ? data : new Uint8Array(data);
+        const blob = new Blob([bytes.buffer], { type: 'image/gif' });
+        if (resultURL) URL.revokeObjectURL(resultURL);
+        resultURL = URL.createObjectURL(blob);
+
+        els.resultImg.src = resultURL;
+        els.downloadBtn.href = resultURL;
+        els.downloadBtn.download = `${inputFile.name.replace(/\.[^.]+$/, '') || 'converted'}.gif`;
+        els.resultSize.textContent = fmtBytes(blob.size);
+        els.resultSpec.textContent = `${els.width.value}px 최대 · ${els.fps.value} FPS · ${els.colors.value}색`;
+        els.resultDuration.textContent = `${expectedDuration.toFixed(2)}초 (${start.toFixed(2)}–${end.toFixed(2)})`;
+        els.resultMode.textContent = els.paletteMode.options[els.paletteMode.selectedIndex].text.split('—')[0].trim();
+        els.result.classList.add('active');
+        setProgress(1, '완료', '고품질 GIF 변환이 완료되었습니다.');
+        els.result.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      } catch (err) {
+        console.error(err);
+        const msg = String(err?.message || err);
+        setProgress(0, '변환 실패', msg);
+        els.status.innerHTML = `<span class="error">${msg}</span>`;
+        if (/worker|module|cors|fetch/i.test(msg)) {
+          els.runtimeHint.innerHTML = '<span class="warn">로컬 file:// 실행 제한일 수 있습니다.</span> VS Code Live Server 또는 <code>python -m http.server</code>처럼 HTTP로 열면 브라우저 Worker/CORS 문제가 줄어듭니다.';
+        }
+      } finally {
+        await safeDelete(inputName);
+        await safeDelete(outputName);
+        setBusy(false);
+      }
+    }
+
+    els.convertBtn.addEventListener('click', convert);
+    els.cancelBtn.addEventListener('click', () => {
+      if (!converting || !ffmpeg) return;
+      try { ffmpeg.terminate(); } catch (_) {}
+      ffmpeg = null;
+      engineLoaded = false;
+      setBusy(false);
+      setProgress(0, '취소됨', '변환을 취소했습니다. 다음 변환 때 엔진을 다시 로드합니다.');
+      els.engineBadge.textContent = '엔진 재시작 필요';
+    });
+
+    window.addEventListener('beforeunload', () => {
+      if (inputURL) URL.revokeObjectURL(inputURL);
+      if (resultURL) URL.revokeObjectURL(resultURL);
+      if (classWorkerURL) URL.revokeObjectURL(classWorkerURL);
+    });
+
+    updateQualityNote();
+    if (location.protocol === 'file:') {
+      els.runtimeHint.innerHTML = '<span class="warn">file://로 직접 열면 일부 브라우저에서 Worker/CORS 제한이 생길 수 있습니다.</span> 문제가 나면 VS Code Live Server 등으로 HTTP 실행하세요.';
+    }
+  </script>
 </body>
 </html>

@@ -3,242 +3,675 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Video → GIF Studio</title>
-  <meta name="description" content="브라우저에서 FFmpeg 팔레트 기반으로 고품질 GIF를 만드는 동영상 변환기" />
+  <script src="./coi-serviceworker.js"></script>
+  <title>LoopFrame — Video to GIF</title>
+  <meta name="description" content="브라우저에서 동영상을 고품질 GIF로 변환합니다." />
   <style>
     :root {
       color-scheme: dark;
-      --bg: #0c0e13;
-      --panel: #141820;
-      --panel2: #191e28;
-      --line: #2b3342;
-      --text: #f3f6fb;
-      --muted: #98a3b5;
-      --accent: #7c8cff;
-      --accent2: #9e7cff;
-      --good: #4fd6a2;
-      --warn: #ffbf69;
-      --danger: #ff6b7a;
-      --radius: 18px;
-      --shadow: 0 24px 70px rgba(0,0,0,.34);
+      --bg: #0c0d0f;
+      --surface: #14161a;
+      --surface-2: #191c21;
+      --field: #101216;
+      --line: #292d34;
+      --line-hover: #3a4049;
+      --text: #f2f4f7;
+      --muted: #9299a5;
+      --accent: #7c9cff;
+      --accent-hover: #8ba7ff;
+      --success: #55c995;
+      --warning: #e7b05c;
+      --danger: #eb747b;
+      --radius: 10px;
+      --content: 1180px;
     }
+
     * { box-sizing: border-box; }
     html, body { min-height: 100%; }
     body {
       margin: 0;
-      font-family: Inter, Pretendard, "Noto Sans KR", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      background:
-        radial-gradient(900px 500px at 10% -10%, rgba(124,140,255,.18), transparent 65%),
-        radial-gradient(800px 500px at 100% 0%, rgba(158,124,255,.12), transparent 60%),
-        var(--bg);
       color: var(--text);
+      background: var(--bg);
+      font-family: Inter, Pretendard, "Noto Sans KR", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 14px;
+      letter-spacing: -0.01em;
     }
+
     button, input, select { font: inherit; }
     button { cursor: pointer; }
-    .app { width: min(1240px, calc(100% - 28px)); margin: 0 auto; padding: 28px 0 60px; }
-    header { display: flex; gap: 20px; align-items: end; justify-content: space-between; margin-bottom: 22px; }
-    .brand h1 { margin: 0; font-size: clamp(28px, 4vw, 44px); letter-spacing: -.04em; }
-    .brand p { margin: 8px 0 0; color: var(--muted); font-size: 14px; }
-    .badge { padding: 8px 11px; border: 1px solid var(--line); border-radius: 999px; color: #c9d2e2; background: rgba(20,24,32,.75); font-size: 12px; white-space: nowrap; }
-    .grid { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(340px, .75fr); gap: 18px; }
-    .card { background: linear-gradient(180deg, rgba(25,30,40,.97), rgba(18,22,30,.97)); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; }
-    .card-head { padding: 18px 20px; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; align-items: center; gap: 16px; }
-    .card-head h2 { margin: 0; font-size: 16px; }
-    .card-body { padding: 18px 20px 20px; }
+    a { color: inherit; }
+
+    .app-header {
+      height: 58px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(12,13,15,.96);
+      display: flex;
+      align-items: center;
+      position: sticky;
+      top: 0;
+      z-index: 20;
+    }
+
+    .header-inner {
+      width: min(var(--content), calc(100% - 28px));
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+    }
+
+    .brand-mark {
+      width: 30px;
+      height: 30px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      display: grid;
+      place-items: center;
+      background: var(--surface);
+      color: #dce4ff;
+      flex: 0 0 auto;
+    }
+
+    .brand-name {
+      font-size: 15px;
+      font-weight: 750;
+      letter-spacing: -0.02em;
+    }
+
+    .brand-sub {
+      color: var(--muted);
+      font-size: 12px;
+      margin-left: 2px;
+      font-weight: 500;
+    }
+
+    .engine-badge,
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      min-height: 28px;
+      padding: 0 9px;
+      border-radius: 7px;
+      border: 1px solid var(--line);
+      background: var(--surface);
+      color: #c5cbd4;
+      font-size: 11px;
+      white-space: nowrap;
+    }
+
+    .shell {
+      width: min(var(--content), calc(100% - 28px));
+      margin: 0 auto;
+      padding: 18px 0 40px;
+    }
+
+    .workspace {
+      display: grid;
+      grid-template-columns: minmax(0, 1.45fr) minmax(330px, .7fr);
+      gap: 14px;
+      align-items: start;
+    }
+
+    .panel {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface);
+      overflow: hidden;
+    }
+
+    .panel-head {
+      min-height: 50px;
+      padding: 10px 12px 10px 15px;
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .panel-head h2 {
+      margin: 0;
+      font-size: 14px;
+      font-weight: 700;
+    }
+
+    .panel-body { padding: 14px; }
+
+    .btn,
+    .btn-primary,
+    .btn-danger,
+    .icon-btn {
+      border-radius: 8px;
+      border: 1px solid var(--line);
+      min-height: 36px;
+      padding: 0 12px;
+      font-weight: 650;
+      transition: background .12s ease, border-color .12s ease, color .12s ease;
+    }
+
+    .btn,
+    .icon-btn {
+      background: var(--surface-2);
+      color: #dce1e8;
+    }
+
+    .btn:hover:not(:disabled),
+    .icon-btn:hover:not(:disabled) {
+      background: #20242a;
+      border-color: var(--line-hover);
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #0c1020;
+    }
+
+    .btn-primary:hover:not(:disabled) {
+      background: var(--accent-hover);
+      border-color: var(--accent-hover);
+    }
+
+    .btn-danger {
+      display: none;
+      background: #2a181b;
+      border-color: #563137;
+      color: #ffb5ba;
+    }
+
+    .btn-danger.active { display: inline-flex; align-items: center; justify-content: center; }
+
+    button:disabled {
+      cursor: not-allowed;
+      opacity: .45;
+    }
 
     .dropzone {
-      position: relative; min-height: 390px; border: 1px dashed #3d4860; border-radius: 15px;
-      display: grid; place-items: center; overflow: hidden; background: #0d1118;
-      transition: .18s ease;
+      position: relative;
+      min-height: 500px;
+      display: grid;
+      place-items: center;
+      border: 1px dashed #3a3f48;
+      border-radius: 8px;
+      background: #0e1013;
+      overflow: hidden;
+      transition: border-color .12s ease, background .12s ease;
     }
-    .dropzone.drag { border-color: var(--accent); background: rgba(124,140,255,.08); transform: translateY(-1px); }
-    .drop-empty { text-align: center; padding: 40px 20px; }
-    .drop-icon { width: 60px; height: 60px; margin: 0 auto 15px; border-radius: 16px; display: grid; place-items: center; background: linear-gradient(145deg, rgba(124,140,255,.2), rgba(158,124,255,.08)); border: 1px solid rgba(124,140,255,.34); font-size: 26px; }
-    .drop-empty strong { display: block; font-size: 18px; margin-bottom: 7px; }
-    .drop-empty span { color: var(--muted); font-size: 13px; }
-    .preview-wrap { width: 100%; height: 100%; display: none; place-items: center; position: relative; background: #080a0f; }
+
+    .dropzone.drag {
+      border-color: var(--accent);
+      background: #111726;
+    }
+
+    .drop-empty {
+      text-align: center;
+      padding: 30px;
+    }
+
+    .drop-icon {
+      width: 42px;
+      height: 42px;
+      margin: 0 auto 13px;
+      border: 1px solid var(--line);
+      border-radius: 9px;
+      display: grid;
+      place-items: center;
+      background: var(--surface);
+      color: #cbd3df;
+      font-size: 21px;
+    }
+
+    .drop-empty strong {
+      display: block;
+      margin-bottom: 5px;
+      font-size: 14px;
+      font-weight: 700;
+    }
+
+    .drop-empty span {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .preview-wrap {
+      width: 100%;
+      height: 100%;
+      display: none;
+      place-items: center;
+      background: #08090b;
+    }
+
     .preview-wrap.active { display: grid; }
-    video, .result-img { max-width: 100%; max-height: 520px; width: 100%; background: #080a0f; display: block; object-fit: contain; }
-    .file-strip { margin-top: 12px; display: none; gap: 10px; align-items: center; padding: 11px 12px; border: 1px solid var(--line); border-radius: 12px; background: #111620; }
-    .file-strip.active { display: flex; }
-    .file-name { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
-    .file-meta { color: var(--muted); font-size: 12px; white-space: nowrap; }
-    .icon-btn { border: 1px solid var(--line); background: #171d27; color: #dce3ee; border-radius: 9px; padding: 7px 10px; }
 
-    .settings { display: grid; gap: 14px; }
-    .section-title { margin: 4px 0 -2px; color: #dbe2ee; font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
-    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-    label.field { display: grid; gap: 7px; }
-    label.field > span { color: #c8d0dc; font-size: 12px; }
-    input[type="number"], select {
-      width: 100%; border: 1px solid var(--line); border-radius: 10px; background: #10151d; color: var(--text); padding: 10px 11px; outline: none;
+    video, .result-img {
+      width: 100%;
+      max-width: 100%;
+      max-height: 620px;
+      display: block;
+      object-fit: contain;
+      background: #08090b;
     }
-    input[type="number"]:focus, select:focus { border-color: #6979dc; box-shadow: 0 0 0 3px rgba(124,140,255,.12); }
-    .check { display: flex; align-items: center; gap: 9px; color: #c7d0dc; font-size: 12px; user-select: none; }
+
+    .file-strip {
+      margin-top: 10px;
+      display: none;
+      grid-template-columns: minmax(0,1fr) auto auto;
+      gap: 10px;
+      align-items: center;
+      min-height: 42px;
+      padding: 0 0 0 2px;
+    }
+
+    .file-strip.active { display: grid; }
+
+    .file-bullet { display: none; }
+
+    .file-name {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      color: #dfe3e9;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .file-meta {
+      color: var(--muted);
+      font-size: 11px;
+      white-space: nowrap;
+    }
+
+    .icon-btn {
+      min-height: 30px;
+      padding: 0 9px;
+      font-size: 11px;
+    }
+
+    .privacy { display: none; }
+
+    .settings {
+      display: grid;
+      gap: 0;
+    }
+
+    .group {
+      padding: 14px 15px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .group:last-of-type { border-bottom: 0; }
+
+    .group-head {
+      margin-bottom: 11px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .group-title {
+      margin: 0;
+      color: #f1f3f6;
+      font-size: 12px;
+      font-weight: 720;
+    }
+
+    .group-sub { display: none; }
+
+    .row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 9px;
+    }
+
+    .row + .row,
+    .field + .field { margin-top: 9px; }
+
+    .field {
+      display: grid;
+      gap: 6px;
+      min-width: 0;
+    }
+
+    .field > span {
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 550;
+    }
+
+    input[type="number"],
+    select {
+      width: 100%;
+      height: 38px;
+      padding: 0 10px;
+      color: #e9edf2;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--field);
+      outline: none;
+    }
+
+    input[type="number"]:focus,
+    select:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 2px rgba(124,156,255,.14);
+    }
+
+    .row .btn {
+      min-height: 34px;
+      padding: 0 9px;
+      font-size: 11px;
+    }
+
+    .check {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 10px;
+      color: #c4cad2;
+      font-size: 11px;
+      user-select: none;
+    }
+
     .check input { accent-color: var(--accent); }
-    .hint { font-size: 11px; color: var(--muted); line-height: 1.55; }
-    .quality-note { padding: 11px 12px; border: 1px solid #313a4b; background: #111721; border-radius: 11px; color: #aeb8c8; font-size: 12px; line-height: 1.6; }
 
-    .actions { display: grid; grid-template-columns: 1fr auto; gap: 10px; margin-top: 4px; }
-    .primary, .secondary, .danger {
-      border: 0; border-radius: 11px; padding: 12px 15px; font-weight: 750; transition: .15s ease;
+    .quality-note { display: none; }
+
+    .actions {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 8px;
+      padding: 14px 15px 15px;
+      border-top: 1px solid var(--line);
+      background: #121418;
     }
-    .primary { color: white; background: linear-gradient(135deg, var(--accent), var(--accent2)); box-shadow: 0 8px 24px rgba(124,140,255,.22); }
-    .primary:hover:not(:disabled) { filter: brightness(1.06); transform: translateY(-1px); }
-    .primary:disabled { opacity: .45; cursor: not-allowed; box-shadow: none; }
-    .secondary { color: #d9e1ec; background: #1b2230; border: 1px solid #344055; }
-    .danger { color: #ffd8dd; background: rgba(255,107,122,.12); border: 1px solid rgba(255,107,122,.3); display: none; }
-    .danger.active { display: block; }
 
-    .progress-box { margin-top: 14px; display: none; }
+    .actions .btn-primary,
+    .actions .btn-danger { min-height: 42px; }
+
+    .progress-box {
+      display: none;
+      margin: 0 15px 14px;
+      padding: 11px 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #101216;
+    }
+
     .progress-box.active { display: block; }
-    .progress-line { display: flex; justify-content: space-between; gap: 12px; color: #bec7d4; font-size: 12px; margin-bottom: 7px; }
-    .bar { height: 9px; border-radius: 999px; background: #0d1118; overflow: hidden; border: 1px solid #252e3d; }
-    .bar > div { width: 0; height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent2)); transition: width .18s linear; }
-    .status { margin-top: 8px; color: var(--muted); font-size: 11px; min-height: 17px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-    .result { margin-top: 18px; display: none; }
-    .result.active { display: block; }
-    .result-grid { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 18px; }
-    .result-side { display: grid; align-content: start; gap: 10px; }
-    .stat { padding: 12px; background: #111620; border: 1px solid var(--line); border-radius: 11px; }
-    .stat small { display: block; color: var(--muted); margin-bottom: 4px; }
-    .stat strong { font-size: 15px; }
-    .download { text-decoration: none; text-align: center; color: white; background: linear-gradient(135deg, #2cba8b, #3ac8a3); padding: 12px; border-radius: 11px; font-weight: 800; }
-    .privacy { margin-top: 12px; display: flex; gap: 8px; align-items: start; color: #8792a4; font-size: 11px; line-height: 1.5; }
-    .privacy b { color: var(--good); font-weight: 700; }
-    .warn { color: var(--warn); }
+    .progress-line {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 7px;
+      color: #cfd4dc;
+      font-size: 11px;
+    }
+
+    .bar {
+      height: 5px;
+      border-radius: 999px;
+      background: #242830;
+      overflow: hidden;
+    }
+
+    .bar > div {
+      width: 0;
+      height: 100%;
+      background: var(--accent);
+      transition: width .18s linear;
+    }
+
+    .status {
+      margin-top: 7px;
+      min-height: 15px;
+      color: var(--muted);
+      font-size: 10px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .hint {
+      min-height: 0;
+      margin: -4px 15px 14px;
+      color: #7e8692;
+      font-size: 10px;
+      line-height: 1.45;
+    }
+
+    .hint:empty { display: none; }
+    .warn { color: var(--warning); }
     .error { color: var(--danger); }
 
-    @media (max-width: 900px) {
-      .grid { grid-template-columns: 1fr; }
-      .result-grid { grid-template-columns: 1fr; }
-      .dropzone { min-height: 290px; }
-      header { align-items: start; flex-direction: column; }
+    .result {
+      margin-top: 14px;
+      display: none;
     }
-    @media (max-width: 520px) {
+
+    .result.active { display: block; }
+
+    .result-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 250px;
+      gap: 14px;
+    }
+
+    .result-side {
+      display: grid;
+      align-content: start;
+      gap: 8px;
+    }
+
+    .stat {
+      padding: 11px 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #111317;
+    }
+
+    .stat small {
+      display: block;
+      margin-bottom: 4px;
+      color: var(--muted);
+      font-size: 10px;
+    }
+
+    .stat strong {
+      display: block;
+      font-size: 12px;
+      line-height: 1.4;
+    }
+
+    .download {
+      min-height: 40px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 8px;
+      text-decoration: none;
+      font-weight: 700;
+      color: #08150f;
+      background: var(--success);
+    }
+
+    @media (max-width: 900px) {
+      .workspace, .result-grid { grid-template-columns: 1fr; }
+      .dropzone { min-height: 360px; }
+      .brand-sub { display: none; }
+    }
+
+    @media (max-width: 560px) {
+      .header-inner, .shell { width: min(100% - 18px, var(--content)); }
+      .shell { padding-top: 10px; }
+      .workspace { gap: 10px; }
       .row { grid-template-columns: 1fr; }
-      .app { width: min(100% - 18px, 1240px); padding-top: 16px; }
-      .card-head, .card-body { padding-left: 14px; padding-right: 14px; }
+      .dropzone { min-height: 300px; }
+      .file-strip { grid-template-columns: minmax(0,1fr) auto; }
+      .file-meta { grid-column: 1; }
+      .icon-btn { grid-column: 2; grid-row: 1 / span 2; }
+      .result-grid { gap: 10px; }
     }
   </style>
 </head>
 <body>
-  <main class="app">
-    <header>
+  <header class="app-header">
+    <div class="header-inner">
       <div class="brand">
-        <h1>Video → GIF Studio</h1>
-        <p>FFmpeg 팔레트 최적화 · Lanczos 리사이즈 · 브라우저 내부 처리</p>
-      </div>
-      <div class="badge">서버 업로드 없음</div>
-    </header>
-
-    <section class="grid">
-      <article class="card">
-        <div class="card-head">
-          <h2>원본 영상</h2>
-          <button id="pickBtn" class="secondary" type="button">영상 선택</button>
+        <div class="brand-mark" aria-hidden="true">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+            <path d="M7 5.5h10a2.5 2.5 0 0 1 2.5 2.5v8A2.5 2.5 0 0 1 17 18.5H7A2.5 2.5 0 0 1 4.5 16V8A2.5 2.5 0 0 1 7 5.5Z" stroke="currentColor" stroke-width="1.7"/>
+            <path d="M10 9.2 15 12l-5 2.8V9.2Z" fill="currentColor"/>
+          </svg>
         </div>
-        <div class="card-body">
+        <div class="brand-name">LoopFrame <span class="brand-sub">Video → GIF</span></div>
+      </div>
+      <span id="engineBadge" class="engine-badge">엔진 대기</span>
+    </div>
+  </header>
+
+  <main class="shell">
+    <section class="workspace">
+      <article class="panel">
+        <div class="panel-head">
+          <h2>영상</h2>
+          <button id="pickBtn" class="btn" type="button">파일 선택</button>
+        </div>
+        <div class="panel-body">
           <div id="dropzone" class="dropzone">
             <div id="dropEmpty" class="drop-empty">
-              <div class="drop-icon">↥</div>
-              <strong>동영상을 끌어다 놓으세요</strong>
-              <span>MP4, WebM, MOV, MKV 등 · 파일은 외부 서버로 전송되지 않습니다.</span>
+              <div class="drop-icon">＋</div>
+              <strong>동영상을 선택하거나 끌어놓기</strong>
+              <span>MP4 · WebM · MOV · MKV · AVI</span>
             </div>
             <div id="previewWrap" class="preview-wrap">
               <video id="video" controls playsinline></video>
             </div>
           </div>
+
           <input id="fileInput" type="file" accept="video/*,.mkv,.mov,.avi,.m4v" hidden />
+
           <div id="fileStrip" class="file-strip">
+            <div class="file-bullet" aria-hidden="true"></div>
             <div class="file-name" id="fileName">-</div>
             <div class="file-meta" id="fileMeta">-</div>
-            <button id="removeBtn" class="icon-btn" type="button">지우기</button>
+            <button id="removeBtn" class="icon-btn" type="button">제거</button>
           </div>
-          <div class="privacy"><b>● 로컬 처리</b><span>영상 데이터는 브라우저의 WebAssembly 메모리에서 변환됩니다. FFmpeg 실행 파일만 CDN에서 최초 로드합니다.</span></div>
+
+          <div class="privacy"><b>로컬 처리</b><span>영상은 외부 서버로 업로드되지 않습니다.</span></div>
         </div>
       </article>
 
-      <aside class="card">
-        <div class="card-head"><h2>GIF 설정</h2><span id="engineBadge" class="badge">엔진 대기</span></div>
-        <div class="card-body settings">
-          <div class="section-title">구간</div>
-          <div class="row">
-            <label class="field"><span>시작 (초)</span><input id="startTime" type="number" min="0" step="0.01" value="0" /></label>
-            <label class="field"><span>종료 (초)</span><input id="endTime" type="number" min="0" step="0.01" value="5" /></label>
-          </div>
-          <div class="row">
-            <button id="setStartBtn" class="secondary" type="button">현재 위치 → 시작</button>
-            <button id="setEndBtn" class="secondary" type="button">현재 위치 → 종료</button>
-          </div>
+      <aside class="panel">
+        <div class="panel-head">
+          <h2>설정</h2>
+        </div>
 
-          <div class="section-title">출력</div>
-          <div class="row">
-            <label class="field"><span>최대 너비</span><input id="width" type="number" min="64" max="1920" step="2" value="720" /></label>
-            <label class="field"><span>FPS</span>
-              <select id="fps">
-                <option value="10">10 — 작은 용량</option>
-                <option value="12">12</option>
-                <option value="15" selected>15 — 권장</option>
-                <option value="20">20</option>
-                <option value="24">24 — 부드러움</option>
-                <option value="30">30 — 매우 큼</option>
-              </select>
-            </label>
-          </div>
-          <label class="check"><input id="noUpscale" type="checkbox" checked /> 원본보다 크게 확대하지 않기</label>
+        <div class="settings">
+          <section class="group">
+            <div class="group-head">
+              <h3 class="group-title">구간</h3>
+            </div>
+            <div class="row">
+              <label class="field"><span>시작 (초)</span><input id="startTime" type="number" min="0" step="0.01" value="0" /></label>
+              <label class="field"><span>종료 (초)</span><input id="endTime" type="number" min="0" step="0.01" value="5" /></label>
+            </div>
+            <div class="row">
+              <button id="setStartBtn" class="btn" type="button">현재 위치 → 시작</button>
+              <button id="setEndBtn" class="btn" type="button">현재 위치 → 종료</button>
+            </div>
+          </section>
 
-          <div class="section-title">색상 / 팔레트</div>
-          <label class="field"><span>팔레트 전략</span>
-            <select id="paletteMode">
-              <option value="global" selected>전체 영상 안정형 — 기본 추천</option>
-              <option value="motion">움직임 우선 — 고정 배경 영상</option>
-              <option value="frame">프레임별 최고 색 정확도 — 용량 증가</option>
-            </select>
-          </label>
-          <div class="row">
-            <label class="field"><span>최대 색상 수</span>
-              <select id="colors">
-                <option value="128">128</option>
-                <option value="192">192</option>
-                <option value="256" selected>256 — 최고 품질</option>
+          <section class="group">
+            <div class="group-head">
+              <h3 class="group-title">출력</h3>
+            </div>
+            <div class="row">
+              <label class="field"><span>최대 너비</span><input id="width" type="number" min="64" max="1920" step="2" value="720" /></label>
+              <label class="field"><span>FPS</span>
+                <select id="fps">
+                  <option value="10">10</option>
+                  <option value="12">12</option>
+                  <option value="15" selected>15</option>
+                  <option value="20">20</option>
+                  <option value="24">24</option>
+                  <option value="30">30</option>
+                </select>
+              </label>
+            </div>
+            <label class="check"><input id="noUpscale" type="checkbox" checked /> 원본보다 크게 확대하지 않기</label>
+          </section>
+
+          <section class="group">
+            <div class="group-head">
+              <h3 class="group-title">색상</h3>
+            </div>
+            <label class="field"><span>팔레트</span>
+              <select id="paletteMode">
+                <option value="global" selected>전체 영상</option>
+                <option value="motion">움직임 우선</option>
+                <option value="frame">프레임별</option>
               </select>
             </label>
-            <label class="field"><span>디더링</span>
-              <select id="dither">
-                <option value="sierra2_4a" selected>Sierra2 4A — 권장</option>
-                <option value="floyd_steinberg">Floyd–Steinberg</option>
-                <option value="bayer">Bayer — 작은 용량</option>
-                <option value="none">없음 — 평면 그래픽</option>
-              </select>
-            </label>
-          </div>
-          <div id="qualityNote" class="quality-note">영상 전체를 분석해 하나의 256색 팔레트를 만들기 때문에 색이 안정적이고 깜빡임이 적습니다.</div>
+            <div class="row">
+              <label class="field"><span>색상 수</span>
+                <select id="colors">
+                  <option value="128">128</option>
+                  <option value="192">192</option>
+                  <option value="256" selected>256</option>
+                </select>
+              </label>
+              <label class="field"><span>디더링</span>
+                <select id="dither">
+                  <option value="sierra2_4a" selected>Sierra2 4A</option>
+                  <option value="floyd_steinberg">Floyd–Steinberg</option>
+                  <option value="bayer">Bayer</option>
+                  <option value="none">없음</option>
+                </select>
+              </label>
+            </div>
+            <div id="qualityNote" class="quality-note"></div>
+          </section>
 
           <div class="actions">
-            <button id="convertBtn" class="primary" type="button" disabled>고품질 GIF 만들기</button>
-            <button id="cancelBtn" class="danger" type="button">취소</button>
+            <button id="convertBtn" class="btn-primary" type="button" disabled>GIF 변환</button>
+            <button id="cancelBtn" class="btn-danger" type="button">취소</button>
           </div>
+
           <div id="progressBox" class="progress-box">
             <div class="progress-line"><span id="progressLabel">준비 중</span><span id="progressPct">0%</span></div>
             <div class="bar"><div id="progressBar"></div></div>
-            <div id="status" class="status">FFmpeg 엔진을 준비합니다.</div>
+            <div id="status" class="status"></div>
           </div>
-          <div id="runtimeHint" class="hint">첫 변환 시 FFmpeg WebAssembly 엔진(약 수십 MB)을 내려받습니다. 긴 영상·고해상도·고FPS는 브라우저 메모리를 많이 사용합니다.</div>
+
+          <div id="runtimeHint" class="hint"></div>
         </div>
       </aside>
     </section>
 
-    <section id="result" class="card result">
-      <div class="card-head"><h2>변환 결과</h2><span id="resultMode" class="badge">GIF</span></div>
-      <div class="card-body result-grid">
+    <section id="result" class="panel result">
+      <div class="panel-head">
+        <h2>결과</h2>
+        <span id="resultMode" class="badge">GIF</span>
+      </div>
+      <div class="panel-body result-grid">
         <div class="preview-wrap active"><img id="resultImg" class="result-img" alt="변환된 GIF 미리보기" /></div>
         <div class="result-side">
           <div class="stat"><small>파일 크기</small><strong id="resultSize">-</strong></div>
-          <div class="stat"><small>출력 설정</small><strong id="resultSpec">-</strong></div>
-          <div class="stat"><small>변환 구간</small><strong id="resultDuration">-</strong></div>
-          <a id="downloadBtn" class="download" download="converted.gif">GIF 다운로드</a>
+          <div class="stat"><small>출력</small><strong id="resultSpec">-</strong></div>
+          <div class="stat"><small>구간</small><strong id="resultDuration">-</strong></div>
+          <a id="downloadBtn" class="download" download="loopframe.gif">GIF 다운로드</a>
         </div>
       </div>
     </section>
@@ -301,7 +734,7 @@
       const mode = els.paletteMode.value;
       const notes = {
         global: '영상 전체를 분석해 하나의 팔레트를 만듭니다. 색이 안정적이고 장면 간 깜빡임이 적어 일반 영상에 가장 무난합니다.',
-        motion: '이전 프레임과 달라진 영역에 더 큰 비중을 줍니다. 배경은 고정되고 캐릭터·피사체가 움직이는 영상에서 팔레트 낭비를 줄이기 좋습니다.',
+        motion: '이전 프레임과 달라진 영역에 더 큰 비중을 줍니다. 배경은 고정되고 피사체만 움직이는 영상에서 팔레트 낭비를 줄이기 좋습니다.',
         frame: '각 프레임마다 새 팔레트를 만듭니다. 작은 대비색과 순간적으로 등장하는 색을 가장 잘 보존하지만 GIF 용량이 크게 늘 수 있습니다.'
       };
       els.qualityNote.textContent = notes[mode];
@@ -319,9 +752,7 @@
       fetchFile = util.fetchFile;
       toBlobURL = util.toBlobURL;
 
-      // CDN에서 @ffmpeg/ffmpeg를 불러와도 class worker는 현재 페이지에서 생성한 blob을 통해 시작한다.
-      // 그 worker 내부에서 CDN의 공식 worker 모듈을 import하므로 상대 import(const.js/errors.js)도 정상 해석된다.
-      const workerBootstrap = `import \"https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@${FFMPEG_VERSION}/dist/esm/worker.js\";`;
+      const workerBootstrap = `import "https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@${FFMPEG_VERSION}/dist/esm/worker.js";`;
       classWorkerURL = URL.createObjectURL(new Blob([workerBootstrap], { type: 'text/javascript' }));
     }
 
@@ -336,7 +767,6 @@
       });
       ffmpeg.on('progress', ({ progress, time }) => {
         if (!converting) return;
-        // complex filter에서는 progress 값이 부정확할 수 있어 time 기반 값을 우선 보정한다.
         const t = Number(time) / 1_000_000;
         let p = Number(progress);
         if (Number.isFinite(t) && expectedDuration > 0) p = Math.max(p || 0, t / expectedDuration);
@@ -346,8 +776,8 @@
       const canMT = crossOriginIsolated && typeof SharedArrayBuffer !== 'undefined';
       const corePkg = canMT ? '@ffmpeg/core-mt' : '@ffmpeg/core';
       const coreBase = `https://cdn.jsdelivr.net/npm/${corePkg}@${CORE_VERSION}/dist/esm`;
-      els.engineBadge.textContent = canMT ? '멀티스레드 로드' : '싱글스레드 로드';
-      setProgress(.03, '엔진 로드 중', canMT ? '멀티스레드 FFmpeg를 준비합니다.' : 'FFmpeg WebAssembly를 준비합니다.');
+      els.engineBadge.textContent = canMT ? '멀티코어 준비 중' : '엔진 로드 중';
+      setProgress(.03, '엔진 로드 중', canMT ? '멀티코어 FFmpeg를 준비합니다.' : 'FFmpeg WebAssembly를 준비합니다.');
 
       const config = {
         classWorkerURL,
@@ -358,10 +788,11 @@
 
       await ffmpeg.load(config);
       engineLoaded = true;
-      els.engineBadge.textContent = canMT ? 'FFmpeg MT 준비됨' : 'FFmpeg 준비됨';
+      els.engineBadge.textContent = canMT ? '멀티코어 사용 중' : '싱글코어 사용 중';
+      const cores = Math.max(1, navigator.hardwareConcurrency || 1);
       els.runtimeHint.textContent = canMT
-        ? '이 페이지는 cross-origin isolated 상태라 멀티스레드 FFmpeg를 사용합니다.'
-        : '현재는 싱글스레드 FFmpeg를 사용합니다. 서비스 배포 시 COOP/COEP 헤더를 설정하면 지원 브라우저에서 멀티스레드 코어를 사용할 수 있습니다.';
+        ? `멀티코어 FFmpeg가 활성화되었습니다. 브라우저가 ${cores}개의 논리 CPU를 보고합니다. 실제 사용 코어 수는 작업에 따라 달라질 수 있습니다.`
+        : '싱글스레드 FFmpeg로 동작 중입니다. GitHub Pages에서는 coi-serviceworker.js가 같은 폴더에 있고 HTTPS로 접속했는지 확인하세요.';
     }
 
     function setFile(file) {
@@ -389,9 +820,8 @@
         els.startTime.max = d || '';
         els.endTime.max = d || '';
         els.fileMeta.textContent = `${fmtBytes(file.size)}${d ? ` · ${d.toFixed(2)}초 · ${els.video.videoWidth}×${els.video.videoHeight}` : ''}`;
-        if (d > 30) els.runtimeHint.innerHTML = '<span class="warn">긴 영상입니다.</span> GIF는 보통 짧은 구간 변환이 적합합니다. 5~12초 구간부터 테스트하는 것을 권장합니다.';
+        if (d > 30) els.runtimeHint.innerHTML = '<span class="warn">긴 영상입니다.</span> GIF는 짧은 구간으로 만들수록 속도와 결과가 좋습니다. 5~12초 정도부터 테스트해 보세요.';
       };
-      // 다음 변환 전에 엔진 로드를 미리 시작해 체감 대기 시간을 줄인다.
       initEngine().catch((err) => {
         console.error(err);
         els.engineBadge.textContent = '엔진 로드 실패';
@@ -404,7 +834,8 @@
       inputFile = null;
       if (inputURL) URL.revokeObjectURL(inputURL);
       inputURL = null;
-      els.video.removeAttribute('src'); els.video.load();
+      els.video.removeAttribute('src');
+      els.video.load();
       els.dropEmpty.style.display = '';
       els.previewWrap.classList.remove('active');
       els.fileStrip.classList.remove('active');
@@ -415,8 +846,8 @@
     els.pickBtn.addEventListener('click', () => els.fileInput.click());
     els.fileInput.addEventListener('change', (e) => { setFile(e.target.files?.[0]); e.target.value = ''; });
     els.removeBtn.addEventListener('click', clearFile);
-    ['dragenter','dragover'].forEach(ev => els.dropzone.addEventListener(ev, (e) => { e.preventDefault(); els.dropzone.classList.add('drag'); }));
-    ['dragleave','drop'].forEach(ev => els.dropzone.addEventListener(ev, (e) => { e.preventDefault(); els.dropzone.classList.remove('drag'); }));
+    ['dragenter','dragover'].forEach((ev) => els.dropzone.addEventListener(ev, (e) => { e.preventDefault(); els.dropzone.classList.add('drag'); }));
+    ['dragleave','drop'].forEach((ev) => els.dropzone.addEventListener(ev, (e) => { e.preventDefault(); els.dropzone.classList.remove('drag'); }));
     els.dropzone.addEventListener('drop', (e) => setFile(e.dataTransfer?.files?.[0]));
     els.dropzone.addEventListener('dblclick', () => { if (!converting) els.fileInput.click(); });
     els.setStartBtn.addEventListener('click', () => { if (inputFile) els.startTime.value = els.video.currentTime.toFixed(2); });
@@ -491,13 +922,13 @@
 
         els.resultImg.src = resultURL;
         els.downloadBtn.href = resultURL;
-        els.downloadBtn.download = `${inputFile.name.replace(/\.[^.]+$/, '') || 'converted'}.gif`;
+        els.downloadBtn.download = `${inputFile.name.replace(/\.[^.]+$/, '') || 'loopframe'}.gif`;
         els.resultSize.textContent = fmtBytes(blob.size);
         els.resultSpec.textContent = `${els.width.value}px 최대 · ${els.fps.value} FPS · ${els.colors.value}색`;
         els.resultDuration.textContent = `${expectedDuration.toFixed(2)}초 (${start.toFixed(2)}–${end.toFixed(2)})`;
         els.resultMode.textContent = els.paletteMode.options[els.paletteMode.selectedIndex].text.split('—')[0].trim();
         els.result.classList.add('active');
-        setProgress(1, '완료', '고품질 GIF 변환이 완료되었습니다.');
+        setProgress(1, '완료', 'GIF 변환이 완료되었습니다.');
         els.result.scrollIntoView({ behavior: 'smooth', block: 'start' });
       } catch (err) {
         console.error(err);
@@ -505,7 +936,7 @@
         setProgress(0, '변환 실패', msg);
         els.status.innerHTML = `<span class="error">${msg}</span>`;
         if (/worker|module|cors|fetch/i.test(msg)) {
-          els.runtimeHint.innerHTML = '<span class="warn">로컬 file:// 실행 제한일 수 있습니다.</span> VS Code Live Server 또는 <code>python -m http.server</code>처럼 HTTP로 열면 브라우저 Worker/CORS 문제가 줄어듭니다.';
+          els.runtimeHint.innerHTML = '<span class="warn">실행 환경 제한일 수 있습니다.</span> GitHub Pages, localhost, 또는 Live Server처럼 HTTP/HTTPS 환경에서 열어 보세요.';
         }
       } finally {
         await safeDelete(inputName);
@@ -532,8 +963,15 @@
     });
 
     updateQualityNote();
+
     if (location.protocol === 'file:') {
-      els.runtimeHint.innerHTML = '<span class="warn">file://로 직접 열면 일부 브라우저에서 Worker/CORS 제한이 생길 수 있습니다.</span> 문제가 나면 VS Code Live Server 등으로 HTTP 실행하세요.';
+      els.runtimeHint.innerHTML = '<span class="warn">file://에서는 Service Worker와 멀티코어 FFmpeg를 사용할 수 없습니다.</span> GitHub Pages(HTTPS) 또는 localhost에서 실행하세요.';
+    } else if (window.crossOriginIsolated && typeof SharedArrayBuffer !== 'undefined') {
+      const cores = Math.max(1, navigator.hardwareConcurrency || 1);
+      els.engineBadge.textContent = '멀티코어 가능';
+      els.runtimeHint.textContent = `cross-origin isolation 활성화 · SharedArrayBuffer 사용 가능 · 논리 CPU ${cores}개 감지. 변환 시 멀티코어 FFmpeg를 로드합니다.`;
+    } else if (location.hostname.endsWith('github.io')) {
+      els.runtimeHint.textContent = 'GitHub Pages 격리 준비 중입니다. 첫 방문에는 Service Worker 등록 때문에 페이지가 한 번 자동 새로고침될 수 있습니다.';
     }
   </script>
 </body>

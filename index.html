@@ -987,18 +987,22 @@
     async function encodeClip(engine, { inputName, outputName, paletteName, start, filters }, signal) {
       encodingStart = null;
       const duration = expectedDuration.toFixed(3);
+      // Keep the decoder and filter graphs within the WASM core's 32-worker pool.
+      const threads = !preferSingleThread && crossOriginIsolated && typeof SharedArrayBuffer !== 'undefined'
+        ? String(Math.min(4, navigator.hardwareConcurrency || 1))
+        : '1';
       // Limit the input before palettegen so it reaches EOF at the selected end time.
-      const clipInput = ['-ss', start.toFixed(3), '-t', duration, '-i', inputName];
+      const clipInput = ['-ss', start.toFixed(3), '-t', duration, '-threads:v', threads, '-i', inputName];
       const args = [...clipInput];
       const video = `${filters.video},showinfo=checksum=0`;
       let graph;
       if (paletteName) {
         setProgress(null, '팔레트 분석 중', `선택한 ${expectedDuration.toFixed(2)}초 구간의 색상을 분석합니다.`);
         await runFFmpeg(engine, [
-          ...clipInput, '-an', '-vf', `${video},${filters.palette}`,
-          '-frames:v', '1', '-update', '1', paletteName
+          '-filter_threads', threads, ...clipInput, '-an', '-vf', `${video},${filters.palette}`,
+          '-threads:v', '1', '-frames:v', '1', '-update', '1', paletteName
         ], signal, true);
-        args.push('-i', paletteName);
+        args.push('-threads:v', '1', '-i', paletteName);
         graph = `[0:v]${video}[v];[v][1:v]${filters.apply}`;
         encodingStart = .35;
       } else {
@@ -1007,7 +1011,8 @@
       }
       setProgress(encodingStart, 'GIF 인코딩 중', '팔레트와 디더링을 적용합니다.');
       await runFFmpeg(engine, [
-        ...args, '-t', duration, '-an', '-filter_complex', graph, '-loop', '0', outputName
+        '-filter_complex_threads', threads, ...args, '-t', duration, '-an', '-filter_complex', graph,
+        '-threads:v', '1', '-loop', '0', outputName
       ], signal);
       encodingStart = null;
     }

@@ -701,9 +701,10 @@
     let ffmpeg = null;
     let FFmpegClass = null;
     let fetchFile = null;
-    let toBlobURL = null;
     let classWorkerURL = null;
-    let engineLoaded = false;
+    let engineLoad = null;
+    const coreURLs = [];
+    let conversionController = null;
     let converting = false;
     let expectedDuration = 1;
 
@@ -741,31 +742,70 @@
     }
     els.paletteMode.addEventListener('change', updateQualityNote);
 
-    async function loadModules() {
+    async function loadModules(signal) {
       if (FFmpegClass) return;
       els.engineBadge.textContent = '모듈 로드 중';
       const [{ FFmpeg }, util] = await Promise.all([
         import(`https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@${FFMPEG_VERSION}/dist/esm/index.js`),
         import(`https://cdn.jsdelivr.net/npm/@ffmpeg/util@${UTIL_VERSION}/dist/esm/index.js`)
       ]);
+      signal.throwIfAborted();
       FFmpegClass = FFmpeg;
       fetchFile = util.fetchFile;
-      toBlobURL = util.toBlobURL;
 
       const workerBootstrap = `import "https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@${FFMPEG_VERSION}/dist/esm/worker.js";`;
       classWorkerURL = URL.createObjectURL(new Blob([workerBootstrap], { type: 'text/javascript' }));
     }
 
-    async function initEngine() {
-      if (engineLoaded && ffmpeg) return;
-      await loadModules();
-      ffmpeg = new FFmpegClass();
+    function resetEngine() {
+      engineLoad?.controller.abort();
+      engineLoad = null;
+      ffmpeg?.terminate();
+      ffmpeg = null;
+      for (const url of coreURLs) URL.revokeObjectURL(url);
+      coreURLs.length = 0;
+    }
 
-      ffmpeg.on('log', ({ message }) => {
+    function initEngine() {
+      if (engineLoad) return engineLoad.promise;
+      if (ffmpeg?.loaded) return Promise.resolve(ffmpeg);
+
+      const controller = new AbortController();
+      const promise = loadEngine(controller.signal).catch((err) => {
+        controller.signal.throwIfAborted();
+        resetEngine();
+        console.error(err);
+        els.engineBadge.textContent = '엔진 로드 실패';
+        els.status.textContent = String(err?.message || err);
+        throw err;
+      }).finally(() => {
+        if (engineLoad?.controller === controller) engineLoad = null;
+      });
+      engineLoad = { controller, promise };
+      return promise;
+    }
+
+    async function fetchCoreURL(url, type, signal) {
+      const response = await fetch(url, { signal });
+      if (!response.ok) throw new Error(`FFmpeg 파일을 받지 못했습니다: ${url.split('/').pop()} (HTTP ${response.status})`);
+      const bytes = await response.arrayBuffer();
+      signal.throwIfAborted();
+      const objectURL = URL.createObjectURL(new Blob([bytes], { type }));
+      coreURLs.push(objectURL);
+      return objectURL;
+    }
+
+    async function loadEngine(signal) {
+      await loadModules(signal);
+      signal.throwIfAborted();
+      const engine = new FFmpegClass();
+      ffmpeg = engine;
+
+      engine.on('log', ({ message }) => {
         if (!converting) return;
         if (message) els.status.textContent = message.length > 150 ? message.slice(0, 147) + '…' : message;
       });
-      ffmpeg.on('progress', ({ progress, time }) => {
+      engine.on('progress', ({ progress, time }) => {
         if (!converting) return;
         const t = Number(time) / 1_000_000;
         let p = Number(progress);
@@ -781,22 +821,24 @@
 
       const config = {
         classWorkerURL,
-        coreURL: await toBlobURL(`${coreBase}/ffmpeg-core.js`, 'text/javascript'),
-        wasmURL: await toBlobURL(`${coreBase}/ffmpeg-core.wasm`, 'application/wasm')
+        coreURL: await fetchCoreURL(`${coreBase}/ffmpeg-core.js`, 'text/javascript', signal),
+        wasmURL: await fetchCoreURL(`${coreBase}/ffmpeg-core.wasm`, 'application/wasm', signal)
       };
-      if (canMT) config.workerURL = await toBlobURL(`${coreBase}/ffmpeg-core.worker.js`, 'text/javascript');
+      if (canMT) config.workerURL = await fetchCoreURL(`${coreBase}/ffmpeg-core.worker.js`, 'text/javascript', signal);
 
-      await ffmpeg.load(config);
-      engineLoaded = true;
+      signal.throwIfAborted();
+      await engine.load(config);
+      signal.throwIfAborted();
       els.engineBadge.textContent = canMT ? '멀티코어 사용 중' : '싱글코어 사용 중';
       const cores = Math.max(1, navigator.hardwareConcurrency || 1);
       els.runtimeHint.textContent = canMT
         ? `멀티코어 FFmpeg가 활성화되었습니다. 브라우저가 ${cores}개의 논리 CPU를 보고합니다. 실제 사용 코어 수는 작업에 따라 달라질 수 있습니다.`
         : '싱글스레드 FFmpeg로 동작 중입니다. GitHub Pages에서는 coi-serviceworker.js가 같은 폴더에 있고 HTTPS로 접속했는지 확인하세요.';
+      return engine;
     }
 
     function setFile(file) {
-      if (!file) return;
+      if (!file || converting) return;
       if (!file.type.startsWith('video/') && !/\.(mkv|mov|avi|m4v|mp4|webm)$/i.test(file.name)) {
         alert('동영상 파일을 선택해 주세요.');
         return;
@@ -822,11 +864,7 @@
         els.fileMeta.textContent = `${fmtBytes(file.size)}${d ? ` · ${d.toFixed(2)}초 · ${els.video.videoWidth}×${els.video.videoHeight}` : ''}`;
         if (d > 30) els.runtimeHint.innerHTML = '<span class="warn">긴 영상입니다.</span> GIF는 짧은 구간으로 만들수록 속도와 결과가 좋습니다. 5~12초 정도부터 테스트해 보세요.';
       };
-      initEngine().catch((err) => {
-        console.error(err);
-        els.engineBadge.textContent = '엔진 로드 실패';
-        els.status.innerHTML = `<span class="error">${String(err?.message || err)}</span>`;
-      });
+      initEngine().catch(() => {});
     }
 
     function clearFile() {
@@ -871,8 +909,8 @@
         `[s1][p]paletteuse=dither=${dither}${ditherExtra}${diffMode}${paletteNew}`;
     }
 
-    async function safeDelete(path) {
-      try { if (ffmpeg) await ffmpeg.deleteFile(path); } catch (_) {}
+    async function safeDelete(engine, path) {
+      try { await engine.deleteFile(path); } catch (_) {}
     }
 
     async function convert() {
@@ -885,6 +923,8 @@
       expectedDuration = end - start;
       if (expectedDuration > 30 && !confirm('30초가 넘는 GIF는 브라우저 메모리와 파일 크기가 매우 커질 수 있습니다. 계속할까요?')) return;
 
+      conversionController = new AbortController();
+      const { signal } = conversionController;
       setBusy(true);
       els.result.classList.remove('active');
       setProgress(.01, '준비 중', 'FFmpeg 엔진을 확인합니다.');
@@ -893,10 +933,15 @@
       const inputName = `input_${Date.now()}.${inputExt}`;
       const outputName = `output_${Date.now()}.gif`;
 
+      let engine;
       try {
-        await initEngine();
+        engine = await initEngine();
+        signal.throwIfAborted();
         setProgress(.06, '영상 로드 중', `${fmtBytes(inputFile.size)} 파일을 WebAssembly 파일 시스템으로 복사합니다.`);
-        await ffmpeg.writeFile(inputName, await fetchFile(inputFile));
+        const inputBytes = await fetchFile(inputFile);
+        signal.throwIfAborted();
+        await engine.writeFile(inputName, inputBytes);
+        signal.throwIfAborted();
 
         const filter = buildFilter();
         const args = [
@@ -910,11 +955,13 @@
         ];
 
         setProgress(.10, 'GIF 인코딩 중', '팔레트 분석 + 디더링 인코딩을 수행합니다.');
-        const code = await ffmpeg.exec(args);
+        const code = await engine.exec(args);
+        signal.throwIfAborted();
         if (code !== 0) throw new Error(`FFmpeg 종료 코드 ${code}`);
 
         setProgress(.99, '결과 읽는 중', '완성된 GIF를 브라우저로 가져옵니다.');
-        const data = await ffmpeg.readFile(outputName);
+        const data = await engine.readFile(outputName);
+        signal.throwIfAborted();
         const bytes = data instanceof Uint8Array ? data : new Uint8Array(data);
         const blob = new Blob([bytes.buffer], { type: 'image/gif' });
         if (resultURL) URL.revokeObjectURL(resultURL);
@@ -931,6 +978,7 @@
         setProgress(1, '완료', 'GIF 변환이 완료되었습니다.');
         els.result.scrollIntoView({ behavior: 'smooth', block: 'start' });
       } catch (err) {
+        if (signal.aborted) return;
         console.error(err);
         const msg = String(err?.message || err);
         setProgress(0, '변환 실패', msg);
@@ -939,18 +987,23 @@
           els.runtimeHint.innerHTML = '<span class="warn">실행 환경 제한일 수 있습니다.</span> GitHub Pages, localhost, 또는 Live Server처럼 HTTP/HTTPS 환경에서 열어 보세요.';
         }
       } finally {
-        await safeDelete(inputName);
-        await safeDelete(outputName);
-        setBusy(false);
+        if (engine && !signal.aborted) {
+          await safeDelete(engine, inputName);
+          await safeDelete(engine, outputName);
+        }
+        if (!signal.aborted) {
+          conversionController = null;
+          setBusy(false);
+        }
       }
     }
 
     els.convertBtn.addEventListener('click', convert);
     els.cancelBtn.addEventListener('click', () => {
-      if (!converting || !ffmpeg) return;
-      try { ffmpeg.terminate(); } catch (_) {}
-      ffmpeg = null;
-      engineLoaded = false;
+      if (!conversionController) return;
+      conversionController.abort();
+      conversionController = null;
+      resetEngine();
       setBusy(false);
       setProgress(0, '취소됨', '변환을 취소했습니다. 다음 변환 때 엔진을 다시 로드합니다.');
       els.engineBadge.textContent = '엔진 재시작 필요';

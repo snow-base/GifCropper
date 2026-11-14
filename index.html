@@ -695,6 +695,7 @@
     const FFMPEG_VERSION = '0.12.15';
     const UTIL_VERSION = '0.12.2';
     const CORE_VERSION = '0.12.10';
+    const ENCODING_IDLE_TIMEOUT_MS = 30_000;
 
     const $ = (id) => document.getElementById(id);
     const els = {
@@ -723,6 +724,7 @@
     let expectedDuration = 1;
     let encodingStart = null;
     let lastEngineLog = '';
+    let preferSingleThread = false;
 
     const fmtBytes = (n) => {
       if (!Number.isFinite(n)) return '-';
@@ -828,7 +830,7 @@
         setProgress(encodingStart + fraction * (.98 - encodingStart));
       });
 
-      const canMT = crossOriginIsolated && typeof SharedArrayBuffer !== 'undefined';
+      const canMT = !preferSingleThread && crossOriginIsolated && typeof SharedArrayBuffer !== 'undefined';
       const corePkg = canMT ? '@ffmpeg/core-mt' : '@ffmpeg/core';
       const coreBase = `https://cdn.jsdelivr.net/npm/${corePkg}@${CORE_VERSION}/dist/esm`;
       els.engineBadge.textContent = canMT ? '멀티코어 준비 중' : '엔진 로드 중';
@@ -848,7 +850,7 @@
       const cores = Math.max(1, navigator.hardwareConcurrency || 1);
       els.runtimeHint.textContent = canMT
         ? `멀티코어 FFmpeg가 활성화되었습니다. 브라우저가 ${cores}개의 논리 CPU를 보고합니다. 실제 사용 코어 수는 작업에 따라 달라질 수 있습니다.`
-        : '싱글스레드 FFmpeg로 동작 중입니다. GitHub Pages에서는 coi-serviceworker.js가 같은 폴더에 있고 HTTPS로 접속했는지 확인하세요.';
+        : '싱글스레드 FFmpeg로 동작 중입니다.';
       return engine;
     }
 
@@ -933,14 +935,81 @@
       try { await engine.deleteFile(path); } catch (_) {}
     }
 
-    async function runFFmpeg(engine, args, signal) {
+    class EncodingIdleError extends Error {}
+
+    async function runFFmpeg(engine, args, signal, trackPalette = false) {
       lastEngineLog = '';
-      const code = await engine.exec(args);
-      signal.throwIfAborted();
-      if (code !== 0) {
-        const detail = lastEngineLog ? ` — ${lastEngineLog}` : '';
-        throw new Error(`${els.progressLabel.textContent} 실패 (FFmpeg 종료 코드 ${code})${detail}`);
+      const stage = els.progressLabel.textContent;
+      let lastActivity = performance.now();
+      let lastFrame = -1;
+      let lastTimestamp = -Infinity;
+      let timer;
+
+      const onLog = ({ message }) => {
+        const match = /Parsed_showinfo_.*?\bn:\s*(\d+)/.exec(message);
+        if (!match || Number(match[1]) <= lastFrame) return;
+        lastActivity = performance.now();
+        lastFrame = Number(match[1]);
+        if (trackPalette) {
+          els.status.textContent = `팔레트 분석에 사용할 영상 프레임을 읽는 중 · ${lastFrame + 1}프레임`;
+        }
+      };
+      const onProgress = ({ time }) => {
+        if (!Number.isFinite(time) || time <= lastTimestamp) return;
+        lastActivity = performance.now();
+        lastTimestamp = time;
+      };
+      engine.on('log', onLog);
+      engine.on('progress', onProgress);
+      const idle = new Promise((_, reject) => {
+        timer = setInterval(() => {
+          if (performance.now() - lastActivity >= ENCODING_IDLE_TIMEOUT_MS) {
+            const detail = lastEngineLog ? ` 마지막 FFmpeg 로그: ${lastEngineLog}` : '';
+            reject(new EncodingIdleError(`${stage} 단계에서 30초 동안 새 진행 신호가 없었습니다.${detail}`));
+          }
+        }, 1_000);
+      });
+
+      try {
+        const code = await Promise.race([engine.exec(args), idle]);
+        signal.throwIfAborted();
+        if (code !== 0) {
+          const detail = lastEngineLog ? ` — ${lastEngineLog}` : '';
+          throw new Error(`${stage} 실패 (FFmpeg 종료 코드 ${code})${detail}`);
+        }
+      } finally {
+        clearInterval(timer);
+        engine.off('log', onLog);
+        engine.off('progress', onProgress);
       }
+    }
+
+    async function encodeClip(engine, { inputName, outputName, paletteName, start, filters }, signal) {
+      encodingStart = null;
+      const duration = expectedDuration.toFixed(3);
+      // Limit the input before palettegen so it reaches EOF at the selected end time.
+      const clipInput = ['-ss', start.toFixed(3), '-t', duration, '-i', inputName];
+      const args = [...clipInput];
+      const video = `${filters.video},showinfo=checksum=0`;
+      let graph;
+      if (paletteName) {
+        setProgress(null, '팔레트 분석 중', `선택한 ${expectedDuration.toFixed(2)}초 구간의 색상을 분석합니다.`);
+        await runFFmpeg(engine, [
+          ...clipInput, '-an', '-vf', `${video},${filters.palette}`,
+          '-frames:v', '1', '-update', '1', paletteName
+        ], signal, true);
+        args.push('-i', paletteName);
+        graph = `[0:v]${video}[v];[v][1:v]${filters.apply}`;
+        encodingStart = .35;
+      } else {
+        graph = `[0:v]${video},split[v][colors];[colors]${filters.palette}[p];[v][p]${filters.apply}`;
+        encodingStart = .10;
+      }
+      setProgress(encodingStart, 'GIF 인코딩 중', '팔레트와 디더링을 적용합니다.');
+      await runFFmpeg(engine, [
+        ...args, '-t', duration, '-an', '-filter_complex', graph, '-loop', '0', outputName
+      ], signal);
+      encodingStart = null;
     }
 
     async function convert() {
@@ -965,40 +1034,36 @@
       const outputName = `output_${Date.now()}.gif`;
       const filters = buildFilters();
       const paletteName = filters.perFrame ? null : `palette_${Date.now()}.png`;
+      const clip = { inputName, outputName, paletteName, start, filters };
 
       let engine;
+      let retried = false;
       try {
-        engine = await initEngine();
-        signal.throwIfAborted();
-        setProgress(.06, '영상 로드 중', `${fmtBytes(inputFile.size)} 파일을 WebAssembly 파일 시스템으로 복사합니다.`);
-        const inputBytes = await fetchFile(inputFile);
-        signal.throwIfAborted();
-        await engine.writeFile(inputName, inputBytes);
-        signal.throwIfAborted();
+        while (true) {
+          engine = await initEngine();
+          signal.throwIfAborted();
+          setProgress(.06, '영상 로드 중', `${fmtBytes(inputFile.size)} 파일을 WebAssembly 파일 시스템으로 복사합니다.`);
+          // writeFile transfers the buffer, so read the original File again on retry.
+          const inputBytes = await fetchFile(inputFile);
+          signal.throwIfAborted();
+          await engine.writeFile(inputName, inputBytes);
+          signal.throwIfAborted();
 
-        const duration = expectedDuration.toFixed(3);
-        // Limit the input before palettegen so it reaches EOF at the selected end time.
-        const clipInput = ['-ss', start.toFixed(3), '-t', duration, '-i', inputName];
-        const args = [...clipInput];
-        let graph;
-        if (paletteName) {
-          setProgress(null, '팔레트 분석 중', `선택한 ${expectedDuration.toFixed(2)}초 구간의 색상을 분석합니다.`);
-          await runFFmpeg(engine, [
-            ...clipInput, '-an', '-vf', `${filters.video},${filters.palette}`,
-            '-frames:v', '1', '-update', '1', paletteName
-          ], signal);
-          args.push('-i', paletteName);
-          graph = `[0:v]${filters.video}[v];[v][1:v]${filters.apply}`;
-          encodingStart = .35;
-        } else {
-          graph = `[0:v]${filters.video},split[v][colors];[colors]${filters.palette}[p];[v][p]${filters.apply}`;
-          encodingStart = .10;
+          try {
+            await encodeClip(engine, clip, signal);
+            break;
+          } catch (err) {
+            signal.throwIfAborted();
+            if (!(err instanceof EncodingIdleError)) throw err;
+            console.warn(err);
+            resetEngine();
+            engine = null;
+            if (retried) throw err;
+            retried = true;
+            preferSingleThread = true;
+            els.runtimeHint.textContent = 'FFmpeg 진행이 멈춰 싱글코어 엔진으로 같은 영상을 다시 변환합니다.';
+          }
         }
-        setProgress(encodingStart, 'GIF 인코딩 중', '팔레트와 디더링을 적용합니다.');
-        await runFFmpeg(engine, [
-          ...args, '-t', duration, '-an', '-filter_complex', graph, '-loop', '0', outputName
-        ], signal);
-        encodingStart = null;
 
         setProgress(.99, '결과 읽는 중', '완성된 GIF를 브라우저로 가져옵니다.');
         const data = await engine.readFile(outputName);
